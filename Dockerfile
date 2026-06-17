@@ -1,0 +1,51 @@
+# ─── EconRoute Dockerfile ─────────────────────────────────────────────────────
+# Base: python:3.11-slim (full Python, minimal OS — no unnecessary tools)
+#
+# Layer caching trick (important for fast rebuilds):
+#   COPY requirements.txt first → pip install → COPY rest of code
+#   Why? If only your .py files change, Docker reuses the cached pip layer.
+#   If you did COPY . . first, ANY file change invalidates the pip cache.
+
+FROM python:3.11-slim
+
+# ─── System dependencies ──────────────────────────────────────────────────────
+# build-essential: needed to compile some Python packages (e.g. numpy, tokenizers)
+# curl: for health checks in docker-compose and Railway
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  curl \
+  && rm -rf /var/lib/apt/lists/*   # clean up apt cache — keeps image small
+
+# ─── Working directory ───────────────────────────────────────────────────────
+# All commands after this run from /app inside the container
+WORKDIR /app
+
+# ─── Install Python dependencies (cached layer) ──────────────────────────────
+# Copy ONLY requirements.txt first.
+# This layer is only re-run if requirements.txt changes.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ─── Copy application code ───────────────────────────────────────────────────
+# This layer is re-run on any code change (that's fine — it's fast).
+COPY . .
+
+# ─── Create non-root user (security best practice) ───────────────────────────
+# Running as root inside containers is a security risk.
+RUN useradd -m -u 1000 econroute && chown -R econroute:econroute /app
+USER econroute
+
+# ─── Expose port ─────────────────────────────────────────────────────────────
+EXPOSE 8000
+
+# ─── Health check ─────────────────────────────────────────────────────────────
+# Docker itself will ping this every 30s to know if container is healthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# ─── Start command ────────────────────────────────────────────────────────────
+# uvicorn: the ASGI server that runs FastAPI
+# --host 0.0.0.0: listen on all interfaces (not just localhost inside container)
+# --port 8000: must match EXPOSE above
+# --reload: auto-restarts on code change (dev only — remove for production)
+CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

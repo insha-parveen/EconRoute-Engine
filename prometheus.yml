@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s   # pull metrics every 15 seconds
+
+scrape_configs:
+  - job_name: "econroute_gateway"
+    static_configs:
+      - targets: ["gateway:8000"]   # 'gateway' = docker service name, not localhost
+    metrics_path: "/metrics"        # FastAPI will expose this endpoint

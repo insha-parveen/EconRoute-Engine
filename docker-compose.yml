@@ -1,0 +1,71 @@
+version: "3.9"
+
+# EconRoute — all services in one command: docker-compose up -d
+# Services: FastAPI gateway, Redis (cache), PostgreSQL (logs), Prometheus (metrics)
+
+services:
+
+  # ─── 1. FastAPI Gateway ──────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: econroute_gateway
+    ports:
+      - "8000:8000" # localhost:8000 → container:8000
+    env_file:
+      - .env # loads GROQ_API_KEY, DATABASE_URL, REDIS_URL, etc.
+    depends_on:
+      redis:
+        condition: service_healthy # wait for Redis before starting
+      postgres:
+        condition: service_healthy # wait for Postgres before starting
+    volumes:
+      - .:/app # live code reload during development
+    restart: unless-stopped
+
+  # ─── 2. Redis (Semantic Cache) ───────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine # alpine = tiny image (~7 MB)
+    container_name: econroute_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ] # redis-cli ping → PONG = healthy
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── 3. PostgreSQL (Request Logs + Cost Tracking) ────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: econroute_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # persist across restarts
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U econroute" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── 4. Prometheus (Metrics Scraper) ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: econroute_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # config (created below)
+    restart: unless-stopped
+
+# ─── Named Volumes ────────────────────────────────────────────────────────────
+volumes:
+  postgres_data: # postgres data lives here even after docker-compose down

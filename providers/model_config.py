@@ -107,7 +107,7 @@ VALID_TIERS = list(GROQ_TIERS.keys())   # ["simple", "medium", "complex"]
 # Source: https://console.groq.com/docs/rate-limits
 
 GROQ_RATE_LIMITS = {
-    "llama-3.1-8b-instant":          {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
-    "llama-3.3-70b-versatile":       {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
-    "deepseek-r1-distill-llama-70b": {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
+    "groq/llama-3.1-8b-instant":          {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
+    "groq/llama-3.3-70b-versatile":       {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
+    "groq/deepseek-r1-distill-llama-70b": {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
 }

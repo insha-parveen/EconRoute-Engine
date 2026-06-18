@@ -62,9 +62,33 @@ GROQ_TIERS: dict[str, TierConfig] = {
 # ─── Local Fallback (Ollama — runs on your machine) ───────────────────────────
 
 OLLAMA_TIERS: dict[str, dict] = {
-    "simple":  {"model": "ollama/qwen2.5:0.5b",  "api_base": "http://localhost:11434"},
-    "medium":  {"model": "ollama/llama3.2:3b",   "api_base": "http://localhost:11434"},
-    "complex": {"model": "ollama/llama3.1:8b",   "api_base": "http://localhost:11434"},
+    "simple": {
+        "model": "ollama/qwen2.5:0.5b",
+        "api_base": "http://localhost:11434",
+        "actual_cost_per_1k_input": 0.0,
+        "actual_cost_per_1k_output": 0.0,
+        "theoretical_cost_per_1k_input": 0.00025,
+        "theoretical_cost_per_1k_output": 0.00125,
+        "max_tokens": 1024,
+    },
+    "medium": {
+        "model": "ollama/llama3.2:3b",
+        "api_base": "http://localhost:11434",
+        "actual_cost_per_1k_input": 0.0,
+        "actual_cost_per_1k_output": 0.0,
+        "theoretical_cost_per_1k_input": 0.00015,
+        "theoretical_cost_per_1k_output": 0.00060,
+        "max_tokens": 2048,
+    },
+    "complex": {
+        "model": "ollama/llama3.1:8b",
+        "api_base": "http://localhost:11434",
+        "actual_cost_per_1k_input": 0.0,
+        "actual_cost_per_1k_output": 0.0,
+        "theoretical_cost_per_1k_input": 0.00500,
+        "theoretical_cost_per_1k_output": 0.01500,
+        "max_tokens": 4096,
+    },
 }
 
 # ─── GPT-4o Baseline (for theoretical savings calculation ONLY) ───────────────

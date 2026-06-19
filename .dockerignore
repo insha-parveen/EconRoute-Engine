@@ -1,0 +1,48 @@
+# ─── EconRoute .dockerignore ──────────────────────────────────────────────────
+# Prevents these files from being copied into the Docker image on COPY . .
+# Two benefits:
+#   1. Security  — .env (secrets) never enters the image layer
+#   2. Speed     — smaller build context = faster docker build
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── Secrets (critical — must never enter image) ─────────────────────────────
+.env
+*.pem
+*.key
+
+# ─── Version control ──────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ─── Python artifacts ─────────────────────────────────────────────────────────
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist
+build
+.venv
+venv
+env
+.pytest_cache
+.coverage
+htmlcov
+
+# ─── Node.js (frontend — not needed in backend image) ────────────────────────
+frontend/node_modules
+frontend/.next
+npm-debug.log
+
+# ─── OS-specific ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.vscode
+.idea
+*.swp
+
+# ─── Eval outputs (large CSVs, not needed at runtime) ────────────────────────
+evals/results

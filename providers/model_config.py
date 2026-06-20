@@ -32,7 +32,7 @@ class TierConfig(TypedDict):
 GROQ_TIERS: dict[str, TierConfig] = {
     "simple": {
         "model": "groq/llama-3.1-8b-instant",
-        "actual_cost_per_1k_input": 0.0,       # free tier
+        "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: Claude Haiku ($0.00025 input / $0.00125 output per 1K)
         "theoretical_cost_per_1k_input": 0.00025,
@@ -49,7 +49,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
         "max_tokens": 2048,
     },
     "complex": {
-        "model": "groq/deepseek-r1-distill-llama-70b",
+        "model": "groq/deepseek-r1-distill-qwen-32b",  # llama-70b decommissioned Sep 2025
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: GPT-4o ($0.00500 input / $0.01500 output per 1K)
@@ -109,5 +109,5 @@ VALID_TIERS = list(GROQ_TIERS.keys())   # ["simple", "medium", "complex"]
 GROQ_RATE_LIMITS = {
     "groq/llama-3.1-8b-instant":          {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
     "groq/llama-3.3-70b-versatile":       {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
-    "groq/deepseek-r1-distill-llama-70b": {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
+    "groq/deepseek-r1-distill-qwen-32b":  {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
 }

@@ -21,10 +21,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # ─── Install Python dependencies (cached layer) ──────────────────────────────
-# Copy ONLY requirements.txt first.
-# This layer is only re-run if requirements.txt changes.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements files first (locked file used for reproducible prod builds).
+# This layer is only re-run if either requirements file changes.
+COPY requirements.txt requirements-locked.txt ./
+RUN pip install --no-cache-dir -r requirements-locked.txt
 
 # ─── Copy application code ───────────────────────────────────────────────────
 # This layer is re-run on any code change (that's fine — it's fast).

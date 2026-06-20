@@ -1,0 +1,19 @@
+# EconRoute — Development & test dependencies
+#
+# PURPOSE: Local dev and CI testing only.
+#          NEVER installed in the Docker production image.
+#
+# USAGE:
+#   Local dev   : pip install -r requirements-dev.txt
+#   CI testing  : pip install -r requirements-dev.txt
+#   Docker prod : pip install -r requirements-locked.txt  (no dev deps)
+#
+# The -r line below pulls in all production deps first,
+# so one command installs everything needed to run + test.
+# ──────────────────────────────────────────────────────────────────────────────
+
+-r requirements.txt             # include all production dependencies
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.23.0          # async test support (needed for FastAPI route tests)

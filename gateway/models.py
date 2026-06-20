@@ -15,7 +15,7 @@ Key schemas:
 from __future__ import annotations
 
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ─── Request Schemas ──────────────────────────────────────────────────────────
@@ -36,15 +36,30 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(default=None, ge=1)
-    stream: Optional[bool] = Field(default=False)   # streaming not supported in Week 1
+    stream: Optional[bool] = Field(default=False)
 
-    class Config:
-        json_schema_extra = {
+    @field_validator("stream")
+    @classmethod
+    def stream_must_be_false(cls, v: Optional[bool]) -> Optional[bool]:
+        """
+        Reject stream=True at validation time — not just in main.py at runtime.
+        Enforces the contract in the schema itself so no request can slip through.
+        Remove this validator in the week streaming is implemented.
+        """
+        if v is True:
+            raise ValueError(
+                "Streaming is not yet supported. Set stream=false or omit the field."
+            )
+        return v
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "model": "auto",
                 "messages": [{"role": "user", "content": "What is the capital of France?"}]
             }
         }
+    )
 
 
 # ─── Internal Routing Schemas ─────────────────────────────────────────────────
@@ -115,8 +130,8 @@ class ChatResponse(BaseModel):
     input_tokens: int
     output_tokens: int
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "chatcmpl-abc123",
                 "object": "chat.completion",
@@ -135,6 +150,7 @@ class ChatResponse(BaseModel):
                 "output_tokens": 3,
             }
         }
+    )
 
 
 # ─── Health Check Schema ──────────────────────────────────────────────────────

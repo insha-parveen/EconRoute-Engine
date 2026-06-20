@@ -158,19 +158,8 @@ async def chat_completions(request: ChatRequest) -> ChatResponse:
     Set model="auto" to let EconRoute choose. Any other model value is accepted
     but EconRoute always routes to the optimal tier regardless.
     """
-    # Streaming not supported in Week 1 — reject cleanly
-    if request.stream:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": {
-                    "message": "Streaming is not yet supported. Set stream=false.",
-                    "type": "invalid_request_error",
-                    "code": 400,
-                }
-            },
-        )
-
+    # stream=True is rejected at Pydantic validation time (ChatRequest.stream_must_be_false).
+    # No runtime check needed here — invalid requests never reach this point.
     return await route(request)
 
 

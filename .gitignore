@@ -1,5 +1,4 @@
 # .gitignore
-cat > .gitignore << 'EOF'
 .env
 *.pem
 *.key
@@ -27,4 +26,3 @@ Thumbs.db
 evals/results/*.csv
 evals/results/*.json
 CLAUDE.md
-EOF

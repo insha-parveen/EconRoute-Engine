@@ -25,7 +25,16 @@ LiteLLM prefix rule:
   e.g. groq/openai/gpt-oss-20b — 'groq' = provider, 'openai/gpt-oss-20b' = model on Groq.
 """
 
+import os
 from typing import TypedDict
+
+
+# Resolved once at import time — same value used for all three tiers.
+# Override in .env:
+#   Windows/Mac Docker : OLLAMA_BASE_URL=http://host.docker.internal:11434
+#   Linux Docker       : OLLAMA_BASE_URL=http://172.17.0.1:11434
+#   Local dev          : OLLAMA_BASE_URL=http://localhost:11434 (default)
+_OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
 
 
 class TierConfig(TypedDict):
@@ -74,7 +83,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
 OLLAMA_TIERS: dict[str, dict] = {
     "simple": {
         "model": "ollama/qwen2.5:0.5b",
-        "api_base": "http://host.docker.internal:11434",   # Week 3: Docker→host bridge
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00025,
@@ -83,7 +92,7 @@ OLLAMA_TIERS: dict[str, dict] = {
     },
     "medium": {
         "model": "ollama/llama3.2:3b",
-        "api_base": "http://host.docker.internal:11434",
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00015,
@@ -92,7 +101,7 @@ OLLAMA_TIERS: dict[str, dict] = {
     },
     "complex": {
         "model": "ollama/llama3.1:8b",
-        "api_base": "http://host.docker.internal:11434",
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00500,

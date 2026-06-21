@@ -11,11 +11,30 @@ Why theoretical rates?
   on an equivalent paid model. This lets us show routing value in a cost-neutral env.
   Rate sources:
     - GPT-4o:       https://openai.com/pricing
-    - Haiku equiv:  Claude Haiku pricing (similar capability to llama-3.1-8b)
+    - Haiku equiv:  Claude Haiku pricing (similar capability to gpt-oss-20b)
     - Mini equiv:   GPT-4o-mini pricing (similar capability to llama-3.3-70b)
+
+Model status (verified June 2026 — console.groq.com/docs/models):
+  simple  : openai/gpt-oss-20b       — Production, 1000 t/s (fastest on Groq)
+  medium  : llama-3.3-70b-versatile  — Production, 280 t/s  (proven quality)
+  complex : openai/gpt-oss-120b      — Production, 500 t/s  (flagship, reasoning)
+
+LiteLLM prefix rule:
+  groq/{model_id} tells LiteLLM to route to Groq.
+  model_id must match EXACTLY what Groq's API expects.
+  e.g. groq/openai/gpt-oss-20b — 'groq' = provider, 'openai/gpt-oss-20b' = model on Groq.
 """
 
+import os
 from typing import TypedDict
+
+
+# Resolved once at import time — same value used for all three tiers.
+# Override in .env:
+#   Windows/Mac Docker : OLLAMA_BASE_URL=http://host.docker.internal:11434
+#   Linux Docker       : OLLAMA_BASE_URL=http://172.17.0.1:11434
+#   Local dev          : OLLAMA_BASE_URL=http://localhost:11434 (default)
+_OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
 
 
 class TierConfig(TypedDict):
@@ -31,7 +50,7 @@ class TierConfig(TypedDict):
 
 GROQ_TIERS: dict[str, TierConfig] = {
     "simple": {
-        "model": "groq/llama-3.1-8b-instant",
+        "model": "groq/openai/gpt-oss-20b",        # 1000 t/s — fastest on Groq
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: Claude Haiku ($0.00025 input / $0.00125 output per 1K)
@@ -40,7 +59,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
         "max_tokens": 1024,
     },
     "medium": {
-        "model": "groq/llama-3.3-70b-versatile",
+        "model": "groq/llama-3.3-70b-versatile",   # 280 t/s — proven, stable
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: GPT-4o-mini ($0.00015 input / $0.00060 output per 1K)
@@ -49,7 +68,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
         "max_tokens": 2048,
     },
     "complex": {
-        "model": "groq/deepseek-r1-distill-qwen-32b",  # llama-70b decommissioned Sep 2025
+        "model": "groq/openai/gpt-oss-120b",       # 500 t/s — flagship, reasoning capable
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: GPT-4o ($0.00500 input / $0.01500 output per 1K)
@@ -64,7 +83,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
 OLLAMA_TIERS: dict[str, dict] = {
     "simple": {
         "model": "ollama/qwen2.5:0.5b",
-        "api_base": "http://localhost:11434",
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00025,
@@ -73,7 +92,7 @@ OLLAMA_TIERS: dict[str, dict] = {
     },
     "medium": {
         "model": "ollama/llama3.2:3b",
-        "api_base": "http://localhost:11434",
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00015,
@@ -82,7 +101,7 @@ OLLAMA_TIERS: dict[str, dict] = {
     },
     "complex": {
         "model": "ollama/llama3.1:8b",
-        "api_base": "http://localhost:11434",
+        "api_base": _OLLAMA_BASE,
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         "theoretical_cost_per_1k_input": 0.00500,
@@ -103,11 +122,12 @@ BASELINE_RATES = {
 
 VALID_TIERS = list(GROQ_TIERS.keys())   # ["simple", "medium", "complex"]
 
-# ─── Groq free tier limits (for rate limit awareness) ─────────────────────────
-# Source: https://console.groq.com/docs/rate-limits
+# ─── Groq free tier limits ────────────────────────────────────────────────────
+# Source: https://console.groq.com/docs/models (verified June 2026)
+# Note: Free tier = Developer plan limits below
 
 GROQ_RATE_LIMITS = {
-    "groq/llama-3.1-8b-instant":          {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
-    "groq/llama-3.3-70b-versatile":       {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
-    "groq/deepseek-r1-distill-qwen-32b":  {"rpm": 30, "tpm": 131_072, "rpd": 14_400},
+    "groq/openai/gpt-oss-20b":       {"rpm": 1000, "tpm": 250_000, "rpd": 14_400},
+    "groq/llama-3.3-70b-versatile":  {"rpm": 1000, "tpm": 300_000, "rpd": 14_400},
+    "groq/openai/gpt-oss-120b":      {"rpm": 1000, "tpm": 250_000, "rpd": 14_400},
 }

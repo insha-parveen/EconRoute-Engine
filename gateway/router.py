@@ -21,7 +21,7 @@ from typing import Literal
 
 from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
 from providers.litellm_client import call_model, LLMError, LLMResponse
-from tracking.cost_calculator import compute_costs
+from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,19 @@ async def route(request: ChatRequest) -> ChatResponse:
 
     if cached_text:
         latency_ms = (time.perf_counter() - start_time) * 1000
-        costs = compute_costs(tier="simple", input_tokens=0, output_tokens=0, cache_hit=True)
+
+        # Estimate tokens so baseline_cost + savings reflect real economic value.
+        # We use estimates here (not actuals) because no LLM was called —
+        # actual token counts only come from the LLM response object.
+        estimated_input  = sum(estimate_tokens_from_text(m.content) for m in request.messages)
+        estimated_output = estimate_tokens_from_text(cached_text)
+
+        costs = compute_costs(
+            tier="simple",
+            input_tokens=estimated_input,
+            output_tokens=estimated_output,
+            cache_hit=True,
+        )
 
         response = _build_response(
             request_id=request_id,

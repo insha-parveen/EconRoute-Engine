@@ -22,6 +22,7 @@ from typing import Literal
 from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
 from providers.litellm_client import call_model, LLMError, LLMResponse
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
+from gateway.cache import find_match, store
 
 logger = logging.getLogger(__name__)
 
@@ -76,22 +77,24 @@ def _classify_complexity(messages: list[ChatMessage]) -> str:
     return "medium"
 
 
-# ─── Cache Stub (Week 2 will fill this in) ───────────────────────────────────
+# ─── Cache (Week 2 — Redis + sentence-transformers) ─────────────────────────
 
 async def _check_cache(messages: list[ChatMessage]) -> str | None:
     """
-    Week 1 stub — always returns None (cache miss).
-    Week 2 replaces this with Redis cosine similarity lookup.
+    Week 2: cosine similarity lookup via Redis.
+    Delegates to gateway.cache.find_match().
+    Returns cached response string or None on miss/error.
     """
-    return None
+    return await find_match(messages)
 
 
-async def _store_cache(messages: list[ChatMessage], response_text: str) -> None:
+async def _store_cache(messages: list[ChatMessage], response_text: str, tier: str = "unknown") -> None:
     """
-    Week 1 stub — no-op.
-    Week 2 replaces this with Redis embedding storage.
+    Week 2: store embedding + response in Redis with TTL.
+    Delegates to gateway.cache.store().
+    Fire-and-forget — errors are logged, not raised.
     """
-    pass
+    await store(messages, response_text, tier=tier)
 
 
 # ─── Logger Stub (Week 4 will write to Postgres) ─────────────────────────────
@@ -120,7 +123,7 @@ async def route(request: ChatRequest) -> ChatResponse:
     This function is called by main.py for every POST /v1/chat/completions.
 
     Steps:
-      1. Check semantic cache (stub in Week 1)
+      1. Check semantic cache (Week 2 — Redis cosine similarity)
       2. Classify complexity → tier
       3. Call model via LiteLLM (with Ollama fallback attempt)
       4. Compute costs
@@ -217,8 +220,8 @@ async def route(request: ChatRequest) -> ChatResponse:
         cache_hit=False,
     )
 
-    # ── Step 5: Store in cache for next time (stub in Week 1) ────────────────
-    await _store_cache(request.messages, llm_response["content"])
+    # ── Step 5: Store in cache for next time (Week 2 — Redis + embeddings) ───
+    await _store_cache(request.messages, llm_response["content"], tier=tier)
 
     # ── Step 6: Build + log + return ─────────────────────────────────────────
     response = _build_response(

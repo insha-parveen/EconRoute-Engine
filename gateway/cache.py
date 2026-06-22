@@ -32,12 +32,14 @@ Why module-level model load?
   Subsequent requests hit an already-warm model — sub-millisecond embedding.
 """
 
+import asyncio
 import json
 import logging
 import math
 import os
 import time
 import uuid
+from functools import partial
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -90,6 +92,27 @@ def embed(text: str) -> list[float]:
     """
     vector = _model.encode(text, convert_to_numpy=True)
     return vector.tolist()
+
+
+async def embed_async(text: str) -> list[float]:
+    """
+    Async wrapper around embed() — runs in a thread pool.
+
+    Why needed?
+      _model.encode() is CPU-bound (5-50ms). Calling it directly in an
+      async function blocks the event loop — no other requests can be
+      processed during that time.
+
+      run_in_executor() offloads the work to a thread pool so the event
+      loop stays free for other requests while embedding runs in parallel.
+
+    Why get_running_loop() not get_event_loop()?
+      get_event_loop() is deprecated in Python 3.10+.
+      get_running_loop() is the correct modern approach — it returns the
+      currently running loop (guaranteed to exist inside an async context).
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, embed, text)
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -159,7 +182,7 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
     if not query_text:
         return None
 
-    query_vec = embed(query_text)
+    query_vec = await embed_async(query_text)
 
     try:
         r = _get_redis()
@@ -228,7 +251,7 @@ async def store(
     if not query_text or not response:
         return
 
-    query_vec = embed(query_text)
+    query_vec = await embed_async(query_text)
     key       = f"{_KEY_PREFIX}{uuid.uuid4()}"
 
     entry = {

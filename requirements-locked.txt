@@ -31,6 +31,13 @@ groq==1.4.0
 
 # ─── Semantic Cache (Week 2) ──────────────────────────────────────────────────
 redis==8.0.0
+sentence-transformers==3.4.1    # all-MiniLM-L6-v2 embeddings — 384 dim
+torch==2.6.0                    # sentence-transformers backend (CPU only for Week 2)
+transformers==4.50.3            # HuggingFace tokenizers (sentence-transformers dep)
+huggingface-hub==0.29.3         # model download from HF Hub
+tokenizers==0.21.1              # fast tokenizer (transformers dep)
+numpy==1.26.4                   # tensor ops (pin — torch is sensitive to numpy version)
+tqdm==4.67.1                    # progress bars (huggingface-hub dep)
 
 # ─── Database (Week 4) ────────────────────────────────────────────────────────
 SQLAlchemy==2.0.51

@@ -26,6 +26,13 @@ WORKDIR /app
 COPY requirements.txt requirements-locked.txt ./
 RUN pip install --no-cache-dir -r requirements-locked.txt
 
+# ─── Pre-download sentence-transformers model at build time ──────────────────
+# Why here (not at runtime)?
+#   If we download at container start, every `docker-compose up` hits the internet.
+#   Baking it into the image means: download once, fast start forever.
+#   ~22MB model cached in this layer — Docker reuses it unless pip layer changes.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 # ─── Copy application code ───────────────────────────────────────────────────
 # This layer is re-run on any code change (that's fine — it's fast).
 COPY . .

@@ -63,15 +63,30 @@ _TTL       = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
 _KEY_PREFIX = "cache:"
 
 
-# ─── Redis client factory ─────────────────────────────────────────────────────
+# ─── Redis singleton client ──────────────────────────────────────────────────
+# Created ONCE at module load time, reused for every request.
+#
+# Why singleton, not per-request client?
+#   Each aioredis.from_url() creates a NEW connection pool.
+#   Per-request pools are never closed → file descriptors leak → server crash.
+#   Singleton reuses the same pool → redis-py manages connections internally.
+#
+# Why module-level (not global + None check)?
+#   Avoids 'global' keyword (Python code smell).
+#   REDIS_URL is always available at module load time in Docker (loaded from .env).
+#   Simpler: one line creates it, getter just returns it.
+#
+# Shutdown: call await _redis_client.aclose() in FastAPI lifespan (Week 4).
+
+_redis_client: aioredis.Redis = aioredis.from_url(
+    os.getenv("REDIS_URL", "redis://localhost:6379"),
+    decode_responses=True,
+)
+
 
 def _get_redis() -> aioredis.Redis:
-    """
-    Create a Redis client from REDIS_URL env var.
-    Called per-operation — connection pooling handled by redis-py internally.
-    """
-    url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    return aioredis.from_url(url, decode_responses=True)
+    """Return the singleton Redis client. Connection pooling handled by redis-py."""
+    return _redis_client
 
 
 # ─── Core functions ───────────────────────────────────────────────────────────

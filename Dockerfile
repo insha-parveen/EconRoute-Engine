@@ -24,7 +24,11 @@ WORKDIR /app
 # Copy requirements files first (locked file used for reproducible prod builds).
 # This layer is only re-run if either requirements file changes.
 COPY requirements.txt requirements-locked.txt ./
-RUN pip install --no-cache-dir -r requirements-locked.txt
+# Install torch CPU-only FIRST — prevents triton (197MB GPU lib) from downloading.
+# Triton is only needed for GPU inference; we use CPU for embeddings.
+# --timeout 120 handles slow PyPI connections.
+RUN pip install --no-cache-dir --timeout 120     torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --timeout 120 -r requirements-locked.txt
 
 # ─── Pre-download sentence-transformers model at build time ──────────────────
 # Why here (not at runtime)?

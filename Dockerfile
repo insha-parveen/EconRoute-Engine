@@ -28,7 +28,7 @@ COPY requirements.txt requirements-locked.txt ./
 # Triton is only needed for GPU inference; we use CPU for embeddings.
 # --timeout 120 handles slow PyPI connections.
 RUN pip install --no-cache-dir --timeout 120     torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir --timeout 120 -r requirements-locked.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements-locked.txt
 
 # ─── Pre-download sentence-transformers model at build time ──────────────────
 # Why here (not at runtime)?

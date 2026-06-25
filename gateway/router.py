@@ -91,10 +91,14 @@ async def _check_cache(messages: list[ChatMessage]) -> str | None:
 async def _store_cache(messages: list[ChatMessage], response_text: str, tier: str = "unknown") -> None:
     """
     Week 2: store embedding + response in Redis with TTL.
-    Delegates to gateway.cache.store().
-    Fire-and-forget — errors are logged, not raised.
+    Truly fire-and-forget — any error (embed failure, Redis error) is caught
+    and logged here so it never propagates to route() or the caller.
+    A failed cache write must never break the response already sent to the user.
     """
-    await store(messages, response_text, tier=tier)
+    try:
+        await store(messages, response_text, tier=tier)
+    except Exception as e:
+        logger.warning(f"Cache store skipped — {type(e).__name__}: {e}")
 
 
 # ─── Logger Stub (Week 4 will write to Postgres) ─────────────────────────────

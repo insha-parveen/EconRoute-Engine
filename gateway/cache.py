@@ -33,6 +33,7 @@ Why module-level model load?
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -90,6 +91,16 @@ def _get_redis() -> aioredis.Redis:
 
 
 # ─── Core functions ───────────────────────────────────────────────────────────
+
+def _query_id(text: str) -> str:
+    """
+    Return a short non-sensitive identifier for a query — used in logs instead
+    of raw text to prevent PII leakage.
+    Format: sha256[:8] (len=N) — enough to correlate log lines, nothing more.
+    """
+    digest = hashlib.sha256(text.encode()).hexdigest()[:8]
+    return f"sha256:{digest}(len={len(text)})"
+
 
 def embed(text: str) -> list[float]:
     """
@@ -197,7 +208,11 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
     if not query_text:
         return None
 
-    query_vec = await embed_async(query_text)
+    try:
+        query_vec = await embed_async(query_text)
+    except Exception as e:
+        logger.warning(f"Cache embed failed — {type(e).__name__}: {e}")
+        return None
 
     try:
         r = _get_redis()
@@ -229,13 +244,13 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
         if best_score >= _THRESHOLD and best_response:
             logger.info(
                 f"Cache HIT — similarity={best_score:.4f} "
-                f"(threshold={_THRESHOLD}) query='{query_text[:50]}'"
+                f"(threshold={_THRESHOLD}) query={_query_id(query_text)}"
             )
             return best_response
 
         logger.debug(
             f"Cache MISS — best_similarity={best_score:.4f} "
-            f"(threshold={_THRESHOLD}) query='{query_text[:50]}'"
+            f"(threshold={_THRESHOLD}) query={_query_id(query_text)}"
         )
         return None
 
@@ -266,23 +281,23 @@ async def store(
     if not query_text or not response:
         return
 
-    query_vec = await embed_async(query_text)
-    key       = f"{_KEY_PREFIX}{uuid.uuid4()}"
-
-    entry = {
-        "query":     query_text,
-        "embedding": query_vec,
-        "response":  response,
-        "tier":      tier,
-        "timestamp": time.time(),
-    }
-
     try:
+        query_vec = await embed_async(query_text)   # embed_async inside try — failures caught here
+        key       = f"{_KEY_PREFIX}{uuid.uuid4()}"
+
+        entry = {
+            "query":     query_text,
+            "embedding": query_vec,
+            "response":  response,
+            "tier":      tier,
+            "timestamp": time.time(),
+        }
+
         r = _get_redis()
         await r.set(key, json.dumps(entry), ex=_TTL)
         logger.debug(
             f"Cache STORE — key={key} tier={tier} "
-            f"ttl={_TTL}s query='{query_text[:50]}'"
+            f"ttl={_TTL}s query={_query_id(query_text)}"
         )
     except Exception as e:
-        logger.warning(f"Cache store failed (Redis error?) — {e}")
+        logger.warning(f"Cache store failed — {type(e).__name__}: {e}")

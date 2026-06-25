@@ -153,10 +153,23 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
         0.0  = perpendicular (unrelated)
        -1.0  = opposite directions (rare in text embeddings)
 
-    Edge case:
+    Edge cases:
+        Dimension mismatch  → return 0.0 (skip comparison, treat as unrelated)
         Zero-magnitude vector → return 0.0 (avoid division by zero)
+
+    Why dimension check?
+        zip(a, b) silently truncates to the shorter vector — a 384-dim query
+        compared to a corrupt 100-dim stored embedding would produce a plausible
+        but wrong similarity score. Explicit length check + strict=True makes
+        mismatches visible and safe.
     """
-    dot   = sum(x * y for x, y in zip(a, b))
+    if len(a) != len(b):
+        logger.warning(
+            f"cosine_similarity: dimension mismatch ({len(a)} vs {len(b)}) — skipping"
+        )
+        return 0.0
+
+    dot   = sum(x * y for x, y in zip(a, b, strict=True))
     mag_a = math.sqrt(sum(x * x for x in a))
     mag_b = math.sqrt(sum(y * y for y in b))
 
@@ -235,11 +248,16 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
             if not stored_vec:
                 continue
 
-            score = cosine_similarity(query_vec, stored_vec)
+            score    = cosine_similarity(query_vec, stored_vec)
+            response = entry.get("response")
 
-            if score > best_score:
+            # Only consider entries that actually have a response.
+            # Without this guard a high-scoring entry with a missing
+            # response would shadow a lower-scoring entry that has one,
+            # causing a spurious cache miss despite a valid candidate existing.
+            if score > best_score and response:
                 best_score    = score
-                best_response = entry.get("response")
+                best_response = response
 
         if best_score >= _THRESHOLD and best_response:
             logger.info(

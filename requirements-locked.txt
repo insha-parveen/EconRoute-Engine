@@ -26,11 +26,16 @@ starlette==1.3.1                # fastapi depends on this — pin to avoid silen
 anyio==4.14.0                   # starlette async I/O backend
 
 # ─── LLM Gateway ─────────────────────────────────────────────────────────────
-litellm==1.89.1
-groq==1.4.0
+litellm>=1.89.1
+groq>=1.4.0
 
 # ─── Semantic Cache (Week 2) ──────────────────────────────────────────────────
+# ML packages: floor version only (>=), not exact pin.
+# Reason: torch has platform-specific wheels (Windows/Linux/Mac differ).
+# Exact pinning causes "no matching distribution" errors across platforms.
+# sentence-transformers manages its own torch/transformers compatibility.
 redis==8.0.0
+sentence-transformers>=3.0.0    # all-MiniLM-L6-v2 embeddings — 384 dim
 
 # ─── Database (Week 4) ────────────────────────────────────────────────────────
 SQLAlchemy==2.0.51

@@ -27,14 +27,27 @@ COPY requirements.txt requirements-locked.txt ./
 # Install torch CPU-only FIRST — prevents triton (197MB GPU lib) from downloading.
 # Triton is only needed for GPU inference; we use CPU for embeddings.
 # --timeout 120 handles slow PyPI connections.
-RUN pip install --no-cache-dir --timeout 120     torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --timeout 120 --retries 5 torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements-locked.txt
+
+# ─── Model cache directory ───────────────────────────────────────────────────
+# Problem without this: model downloads to root's ~/.cache at build time,
+# but runtime runs as 'econroute' user who can't read root's home.
+# Result: model re-downloads on every container start (defeats the warmup).
+#
+# Fix: point all HuggingFace/sentence-transformers cache to /app/.cache
+# which is inside WORKDIR, owned by econroute after the chown below.
+# ENV persists into runtime so SentenceTransformer() loads from same path.
+ENV HF_HOME=/app/.cache/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/hub
 
 # ─── Pre-download sentence-transformers model at build time ──────────────────
 # Why here (not at runtime)?
 #   If we download at container start, every `docker-compose up` hits the internet.
 #   Baking it into the image means: download once, fast start forever.
 #   ~22MB model cached in this layer — Docker reuses it unless pip layer changes.
+#   HF_HOME above ensures build-time and runtime use the SAME cache path.
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # ─── Copy application code ───────────────────────────────────────────────────

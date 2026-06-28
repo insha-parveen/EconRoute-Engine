@@ -24,6 +24,7 @@ from providers.litellm_client import call_model, LLMError, LLMResponse
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
 from gateway.cache import find_match, store
 from gateway.classifier import classify
+from gateway.fallback import call_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -148,42 +149,17 @@ async def route(request: ChatRequest) -> ChatResponse:
     # ── Step 2: Classify Complexity ──────────────────────────────────────────
     tier = _classify_complexity(request.messages)
 
-    # ── Step 3: Call Model ───────────────────────────────────────────────────
-    fallback_used = False
-    llm_response: LLMResponse | None = None
-
-    # Try Groq first
-    try:
-        llm_response = await call_model(
-            tier=tier,
-            messages=request.messages,
-            temperature=request.temperature or 0.7,
-            max_tokens=request.max_tokens,
-            use_ollama=False,
-        )
-    except LLMError as groq_error:
-        logger.warning(f"Groq failed for tier={tier}: {groq_error}")
-
-        # Fallback to Ollama if enabled
-        fallback_enabled = os.getenv("FALLBACK_TO_OLLAMA", "true").lower() == "true"
-        if fallback_enabled:
-            logger.info(f"Attempting Ollama fallback for tier={tier}")
-            try:
-                llm_response = await call_model(
-                    tier=tier,
-                    messages=request.messages,
-                    temperature=request.temperature or 0.7,
-                    max_tokens=request.max_tokens,
-                    use_ollama=True,
-                )
-                fallback_used = True
-                logger.info(f"Ollama fallback succeeded for tier={tier}")
-            except LLMError as ollama_error:
-                logger.error(f"Ollama fallback also failed: {ollama_error}")
-                raise groq_error   # raise original Groq error to caller
-
-        else:
-            raise groq_error
+    # ── Step 3: Call Model (with full fallback chain) ───────────────────────
+    # call_with_fallback handles: backoff on rate limits, tier escalation,
+    # Ollama fallback, and clear error messages.
+    llm_response, tier_used, fallback_used = await call_with_fallback(
+        tier=tier,
+        messages=request.messages,
+        temperature=request.temperature or 0.7,
+        max_tokens=request.max_tokens,
+    )
+    # Update tier in case fallback chain escalated (simple → medium etc.)
+    tier = tier_used
 
     latency_ms = (time.perf_counter() - start_time) * 1000
 

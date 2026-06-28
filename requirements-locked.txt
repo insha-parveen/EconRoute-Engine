@@ -36,7 +36,7 @@ groq>=1.4.0
 # sentence-transformers manages its own torch/transformers compatibility.
 redis==8.0.0
 sentence-transformers>=3.0.0    # all-MiniLM-L6-v2 embeddings — 384 dim
-
+semantic-router>=0.0.72
 # ─── Database (Week 4) ────────────────────────────────────────────────────────
 SQLAlchemy==2.0.51
 asyncpg==0.31.0

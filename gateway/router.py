@@ -3,7 +3,7 @@ gateway/router.py — The brain of EconRoute.
 
 Flow per request:
   1. Semantic cache check  (Week 2 — stub in Week 1)
-  2. Complexity classify   (Week 3 semantic-router — keyword heuristic in Week 1)
+  2. Complexity classify   (Week 3 — semantic-router replacing keyword heuristic)
   3. Call model via LiteLLM
   4. Compute costs
   5. Log to DB             (Week 4 — print to console in Week 1)
@@ -23,58 +23,29 @@ from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMe
 from providers.litellm_client import call_model, LLMError, LLMResponse
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
 from gateway.cache import find_match, store
+from gateway.classifier import classify
 
 logger = logging.getLogger(__name__)
 
 
-# ─── Week 1 Complexity Classifier (Keyword Heuristic) ────────────────────────
-# This is a TEMPORARY placeholder. Week 3 replaces this with semantic-router.
-# It works well enough to demonstrate routing — don't over-engineer now.
-
-COMPLEX_KEYWORDS = {
-    "analyze", "analyse", "explain in detail", "compare", "contrast",
-    "write a program", "write code", "debug", "implement", "algorithm",
-    "design", "architecture", "proof", "derive", "calculate", "solve",
-    "research", "summarize this", "translate this entire", "essay",
-}
-
-SIMPLE_KEYWORDS = {
-    "what is", "who is", "when was", "where is", "capital of",
-    "define", "spell", "how do you say", "what does", "abbreviation",
-    "yes or no", "true or false", "convert", "temperature",
-}
-
+# ─── Week 3 Complexity Classifier (semantic-router) ─────────────────────────
+# Replaces Week 1 keyword heuristic with meaning-based classification.
+# "Can you tell me about Python?" → simple (keyword missed this; semantic gets it)
 
 def _classify_complexity(messages: list[ChatMessage]) -> str:
     """
-    Week 1 heuristic classifier.
+    Classify query complexity using semantic-router.
     Returns: "simple" | "medium" | "complex"
 
-    Logic: check last user message for keywords.
-    Defaults to "medium" when ambiguous (safer than guessing wrong tier).
+    Extracts last user message → passes to classify() in classifier.py.
+    Falls back to "medium" on empty input or classifier error (handled inside classify()).
     """
-    # Get the last user message content
     user_messages = [m for m in messages if m.role == "user"]
     if not user_messages:
         return "medium"
 
-    last_user_msg = user_messages[-1].content.lower()
-
-    # Check complex keywords first (higher cost = be conservative)
-    for keyword in COMPLEX_KEYWORDS:
-        if keyword in last_user_msg:
-            logger.debug(f"Classified as COMPLEX (keyword: '{keyword}')")
-            return "complex"
-
-    # Check simple keywords
-    for keyword in SIMPLE_KEYWORDS:
-        if keyword in last_user_msg:
-            logger.debug(f"Classified as SIMPLE (keyword: '{keyword}')")
-            return "simple"
-
-    # Default: medium (safe middle ground)
-    logger.debug("Classified as MEDIUM (default)")
-    return "medium"
+    last_user_msg = user_messages[-1].content
+    return classify(last_user_msg)
 
 
 # ─── Cache (Week 2 — Redis + sentence-transformers) ─────────────────────────

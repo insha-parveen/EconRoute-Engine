@@ -55,7 +55,28 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ─── 4. Prometheus (Metrics Scraper) ─────────────────────────────────────────
+  # ─── 4. Streamlit Dashboard (Cost Analytics — Week 4) ────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile # reuses the gateway image (deps already installed)
+    container_name: econroute_dashboard
+    command: >
+      streamlit run dashboard/app.py
+      --server.port 8501 --server.address 0.0.0.0
+    environment:
+      # In-compose Postgres host is 'postgres'; sync psycopg2 URL for the dashboard.
+      DASHBOARD_DATABASE_URL: postgresql+psycopg2://econroute:econroute@postgres:5432/econroute
+    ports:
+      - "8501:8501" # localhost:8501 → Streamlit
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app # live reload of dashboard code
+    restart: unless-stopped
+
+  # ─── 5. Prometheus (Metrics Scraper) ─────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: econroute_prometheus

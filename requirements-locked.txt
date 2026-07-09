@@ -44,6 +44,13 @@ SQLAlchemy==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
 
+# ─── Dashboard (Week 4) ───────────────────────────────────────────────────────
+# Floors only (>=): streamlit + pandas pull large, platform-varying wheel trees.
+streamlit>=1.37.0
+pandas>=2.2.0
+plotly>=5.22.0
+psycopg2-binary>=2.9.9          # SYNC Postgres driver for the dashboard
+
 # ─── Observability ───────────────────────────────────────────────────────────
 prometheus-fastapi-instrumentator==8.0.0
 

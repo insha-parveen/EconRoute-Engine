@@ -26,9 +26,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from gateway.cache import check_redis, close_redis
 from gateway.models import ChatRequest, ChatResponse, HealthResponse
 from gateway.router import route
 from providers.litellm_client import LLMError
+from tracking.db import check_db, dispose_engine, init_db
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 # Do this before anything else so all modules inherit the config.
@@ -62,12 +64,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"✅ Medium  model : {os.getenv('MEDIUM_MODEL',  'groq/llama-3.3-70b-versatile')}")
     logger.info(f"✅ Complex model : {os.getenv('COMPLEX_MODEL', 'groq/deepseek-r1-distill-llama-70b')}")
     logger.info(f"✅ Ollama fallback: {os.getenv('FALLBACK_TO_OLLAMA', 'true')}")
+
+    # Ensure the request_logs table exists (best-effort — see init_db docstring).
+    await init_db()
     logger.info("=" * 55)
 
     yield  # ← app runs here
 
     # ── SHUTDOWN ─────────────────────────────────────────────────────────────
     logger.info("EconRoute Gateway — shutting down")
+    await close_redis()       # Week 4: resolves the aclose() TODO
+    await dispose_engine()    # Week 4: release Postgres connection pool
 
 
 # ─── FastAPI App ──────────────────────────────────────────────────────────────
@@ -171,19 +178,28 @@ async def chat_completions(request: ChatRequest) -> ChatResponse:
 )
 async def health_check() -> HealthResponse:
     """
-    Returns connectivity status for all dependencies.
+    Returns real connectivity status for all dependencies (Week 4).
 
-    Week 1: stubs (always returns 'connected').
-    Week 2: real Redis ping.
-    Week 4: real Postgres query + Groq test call.
+    - cache : Redis PING
+    - db    : Postgres SELECT 1
+    - groq  : GROQ_API_KEY presence (key-only — we don't burn a live call / rate
+              limit on every health poll; the router surfaces real Groq errors as 503)
+
+    status is 'ok' only when both cache and db are connected, else 'degraded'.
     """
-    # TODO Week 2: redis.ping()
-    # TODO Week 4: db.execute("SELECT 1"), groq test call
+    cache_status = await check_redis()
+    db_status = await check_db()
+
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    groq_status = "ok" if groq_key and groq_key != "gsk_your_key_here" else "not_configured"
+
+    overall = "ok" if cache_status == "connected" and db_status == "connected" else "degraded"
+
     return HealthResponse(
-        status="ok",
-        cache="connected",    # stub — Week 2
-        db="connected",       # stub — Week 4
-        groq="ok",            # stub — Week 4
+        status=overall,
+        cache=cache_status,
+        db=db_status,
+        groq=groq_status,
     )
 
 

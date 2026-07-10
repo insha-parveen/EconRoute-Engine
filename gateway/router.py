@@ -15,6 +15,7 @@ All complexity lives here, main.py stays clean.
 
 import time
 import uuid
+import hashlib
 import logging
 import os
 from typing import Literal
@@ -22,6 +23,7 @@ from typing import Literal
 from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
 from providers.litellm_client import call_model, LLMError, LLMResponse
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
+from tracking.db import log_request as db_log_request
 from gateway.cache import find_match, store
 from gateway.classifier import classify
 from gateway.fallback import call_with_fallback
@@ -73,20 +75,57 @@ async def _store_cache(messages: list[ChatMessage], response_text: str, tier: st
         logger.warning(f"Cache store skipped — {type(e).__name__}: {e}")
 
 
-# ─── Logger Stub (Week 4 will write to Postgres) ─────────────────────────────
+# ─── Request Logger (Week 4 — Postgres) ──────────────────────────────────────
 
-async def _log_request(response: ChatResponse) -> None:
+def _query_id(messages: list[ChatMessage]) -> str:
     """
-    Week 1: print to console.
-    Week 4: replaces with async PostgreSQL insert + WebSocket emit.
+    Non-sensitive identifier for the query — a sha256 hash of the last user message,
+    NEVER the raw text (raw prompts are PII). Mirrors gateway/cache.py::_query_id.
+    """
+    user_messages = [m for m in messages if m.role == "user"]
+    text = user_messages[-1].content if user_messages else ""
+    digest = hashlib.sha256(text.encode()).hexdigest()[:16]
+    return f"sha256:{digest}(len={len(text)})"
+
+
+async def _log_request(
+    response: ChatResponse,
+    *,
+    fallback_used: bool,
+    query_id: str,
+) -> None:
+    """
+    Console summary + best-effort Postgres insert (Week 4).
+
+    The console line is unchanged from Week 1. The DB write is delegated to
+    tracking.db.log_request, which swallows its own errors — a logging failure
+    must never break a response we already produced.
     """
     logger.info(
         f"[ROUTE] tier={response.tier} | model={response.model_used} | "
-        f"cache_hit={response.cache_hit} | latency={response.latency_ms:.0f}ms | "
+        f"cache_hit={response.cache_hit} | fallback={fallback_used} | "
+        f"latency={response.latency_ms:.0f}ms | "
         f"actual=${response.actual_cost_usd:.5f} | "
         f"theoretical=${response.theoretical_cost_usd:.5f} | "
         f"baseline=${response.baseline_cost_usd:.5f} | "
         f"savings=${response.savings_usd:.5f} ({response.savings_source})"
+    )
+
+    await db_log_request(
+        request_id=response.id,
+        query_id=query_id,
+        tier=response.tier,
+        model_used=response.model_used,
+        cache_hit=response.cache_hit,
+        fallback_used=fallback_used,
+        latency_ms=response.latency_ms,
+        input_tokens=response.input_tokens,
+        output_tokens=response.output_tokens,
+        actual_cost_usd=response.actual_cost_usd,
+        theoretical_cost_usd=response.theoretical_cost_usd,
+        baseline_cost_usd=response.baseline_cost_usd,
+        savings_usd=response.savings_usd,
+        savings_source=response.savings_source,
     )
 
 
@@ -112,6 +151,7 @@ async def route(request: ChatRequest) -> ChatResponse:
     """
     start_time = time.perf_counter()
     request_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    query_id = _query_id(request.messages)   # PII-safe hash for logging
 
     # ── Step 1: Cache Check ──────────────────────────────────────────────────
     cached_text = await _check_cache(request.messages)
@@ -143,7 +183,7 @@ async def route(request: ChatRequest) -> ChatResponse:
             latency_ms=latency_ms,
             costs=costs,
         )
-        await _log_request(response)
+        await _log_request(response, fallback_used=False, query_id=query_id)
         return response
 
     # ── Step 2: Classify Complexity ──────────────────────────────────────────
@@ -186,7 +226,7 @@ async def route(request: ChatRequest) -> ChatResponse:
         latency_ms=latency_ms,
         costs=costs,
     )
-    await _log_request(response)
+    await _log_request(response, fallback_used=fallback_used, query_id=query_id)
     return response
 
 

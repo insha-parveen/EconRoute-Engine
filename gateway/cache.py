@@ -90,6 +90,31 @@ def _get_redis() -> aioredis.Redis:
     return _redis_client
 
 
+async def check_redis() -> str:
+    """
+    Health probe (Week 4): 'connected' if the Redis PING succeeds, else 'error'.
+    Never raises — /health must return a body even when Redis is down.
+    """
+    try:
+        await _redis_client.ping()
+        return "connected"
+    except Exception as e:
+        logger.warning(f"Redis health check failed — {type(e).__name__}: {e}")
+        return "error"
+
+
+async def close_redis() -> None:
+    """
+    Close the singleton client's connection pool on shutdown (Week 4).
+    Resolves the aclose() TODO in the module header. Best-effort — never raises.
+    """
+    try:
+        await _redis_client.aclose()
+        logger.info("Redis client closed")
+    except Exception as e:
+        logger.warning(f"Redis close failed — {type(e).__name__}: {e}")
+
+
 # ─── Core functions ───────────────────────────────────────────────────────────
 
 def _query_id(text: str) -> str:

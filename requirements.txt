@@ -23,6 +23,12 @@ sqlalchemy>=2.0.0                  # async ORM
 asyncpg>=0.29.0                    # async PostgreSQL driver (used by SQLAlchemy)
 alembic>=1.13.0                    # DB migrations
 
+# ─── Dashboard (Week 4) ───────────────────────────────────────────────────────
+streamlit>=1.37.0                  # cost-analytics dashboard (dashboard/app.py)
+pandas>=2.2.0                      # dataframe aggregation for the dashboard
+plotly>=5.22.0                     # interactive charts
+psycopg2-binary>=2.9.9             # SYNC Postgres driver — dashboard reads (gateway uses asyncpg)
+
 # ─── Observability ───────────────────────────────────────────────────────────
 prometheus-fastapi-instrumentator>=5.9.0   # auto-instruments FastAPI for Prometheus
 

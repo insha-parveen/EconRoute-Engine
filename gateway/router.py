@@ -18,6 +18,7 @@ import uuid
 import hashlib
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Literal
 
 from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
@@ -27,6 +28,7 @@ from tracking.db import log_request as db_log_request
 from gateway.cache import find_match, store
 from gateway.classifier import classify
 from gateway.fallback import call_with_fallback
+from websocket.manager import broadcast_request_event
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,31 @@ async def _log_request(
         baseline_cost_usd=response.baseline_cost_usd,
         savings_usd=response.savings_usd,
         savings_source=response.savings_source,
+    )
+
+    # Week 5: push a PII-safe summary to the real-time live feed. Fire-and-forget
+    # — broadcast_request_event swallows all errors, so a WS failure can never
+    # break a response we already produced. query_id (sha256) is sent, never the
+    # raw prompt.
+    await broadcast_request_event(
+        {
+            "type": "request",
+            "id": response.id,
+            "query_id": query_id,
+            "tier": response.tier,
+            "model_used": response.model_used,
+            "cache_hit": response.cache_hit,
+            "fallback_used": fallback_used,
+            "latency_ms": round(response.latency_ms, 2),
+            "input_tokens": response.input_tokens,
+            "output_tokens": response.output_tokens,
+            "actual_cost_usd": response.actual_cost_usd,
+            "theoretical_cost_usd": response.theoretical_cost_usd,
+            "baseline_cost_usd": response.baseline_cost_usd,
+            "savings_usd": response.savings_usd,
+            "savings_source": response.savings_source,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
     )
 
 

@@ -21,7 +21,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -31,6 +31,7 @@ from gateway.models import ChatRequest, ChatResponse, HealthResponse
 from gateway.router import route
 from providers.litellm_client import LLMError
 from tracking.db import check_db, dispose_engine, init_db
+from websocket.manager import manager
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 # Do this before anything else so all modules inherit the config.
@@ -203,6 +204,33 @@ async def health_check() -> HealthResponse:
     )
 
 
+@app.websocket("/ws/requests")
+async def ws_requests(websocket: WebSocket):
+    """
+    Real-time request live feed (Week 5).
+
+    Server-push only: every routed request is broadcast here as JSON right after
+    it is logged (see router._log_request → broadcast_request_event). The
+    Next.js dashboard connects and listens; clients send nothing.
+
+    We await receive_text() purely to detect disconnect — it unblocks by raising
+    WebSocketDisconnect when the client closes, at which point we prune the socket.
+
+    Note: CORS middleware does not apply to WebSockets. The browser's WS handshake
+    is not subject to the same-origin/CORS rules used for fetch(), so no extra
+    config is needed for the frontend on :3000 to connect.
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
+    except Exception:
+        # Any other transport error → treat as a disconnect and prune the socket.
+        await manager.disconnect(websocket)
+
+
 @app.get("/", tags=["ops"], summary="Root — links to docs")
 async def root():
     """Quick sanity check that the server is running."""
@@ -212,4 +240,5 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "chat": "/v1/chat/completions",
+        "live_feed": "/ws/requests",
     }

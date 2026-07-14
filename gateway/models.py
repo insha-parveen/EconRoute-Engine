@@ -160,3 +160,68 @@ class HealthResponse(BaseModel):
     cache: str       # "connected" | "error"
     db: str          # "connected" | "error"
     groq: str        # "ok" | "error"
+
+
+# ─── Analytics Schemas (Week 5 — /v1/stats, /v1/requests) ─────────────────────
+# All fields defaulted so an empty payload (no rows / DB down) still validates and
+# returns a clean 200. Consumed by the Next.js dashboard.
+
+class StatsTotals(BaseModel):
+    requests: int = 0
+    savings_usd: float = 0.0
+    baseline_usd: float = 0.0
+    savings_pct: float = 0.0          # savings / baseline * 100
+    cache_hit_rate: float = 0.0       # % of requests served from cache
+    actual_spend: float = 0.0         # always 0 — Groq/Ollama are free
+
+
+class TierCount(BaseModel):
+    tier: str
+    count: int
+
+
+class LatencyPercentile(BaseModel):
+    tier: str
+    p50: float
+    p95: float
+    count: int
+
+
+class CumulativePoint(BaseModel):
+    timestamp: str                    # ISO 8601
+    cumulative_savings: float
+
+
+class CacheHitMiss(BaseModel):
+    hit: int = 0
+    miss: int = 0
+
+
+class StatsResponse(BaseModel):
+    """Aggregated analytics for the dashboard — mirrors the Streamlit computations."""
+    totals: StatsTotals = Field(default_factory=StatsTotals)
+    tier_distribution: list[TierCount] = Field(default_factory=list)
+    latency_percentiles: list[LatencyPercentile] = Field(default_factory=list)
+    cumulative_savings: list[CumulativePoint] = Field(default_factory=list)
+    cache_hit_vs_miss: CacheHitMiss = Field(default_factory=CacheHitMiss)
+
+
+class RequestRow(BaseModel):
+    """One recent request — PII-safe columns only (query_id is a hash, never raw text)."""
+    created_at: str                   # ISO 8601
+    tier: str
+    model_used: str
+    query_id: str
+    cache_hit: bool
+    fallback_used: bool
+    latency_ms: float
+    input_tokens: int
+    output_tokens: int
+    theoretical_cost_usd: float
+    baseline_cost_usd: float
+    savings_usd: float
+    savings_source: str
+
+
+class RequestsResponse(BaseModel):
+    requests: list[RequestRow] = Field(default_factory=list)

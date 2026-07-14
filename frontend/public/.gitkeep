@@ -1,0 +1,2 @@
+# Static assets served at the site root. Kept so the deferred Dockerfile's
+# `COPY public` step succeeds. Add favicons/images here.

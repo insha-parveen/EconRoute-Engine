@@ -21,17 +21,24 @@ import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from gateway.cache import check_redis, close_redis
-from gateway.models import ChatRequest, ChatResponse, HealthResponse
+from gateway.models import (
+    ChatRequest,
+    ChatResponse,
+    HealthResponse,
+    RequestsResponse,
+    StatsResponse,
+)
 from gateway.router import route
 from providers.litellm_client import LLMError
 from tracking.db import check_db, dispose_engine, init_db
 from websocket.manager import manager
+from gateway.analytics import compute_stats, list_recent_requests
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 # Do this before anything else so all modules inherit the config.
@@ -229,6 +236,33 @@ async def ws_requests(websocket: WebSocket):
     except Exception:
         # Any other transport error → treat as a disconnect and prune the socket.
         await manager.disconnect(websocket)
+
+
+# ─── Analytics endpoints (Week 5 — read-only, for the Next.js dashboard) ─────
+# Registered as decorators (NOT app.include_router) — the installed
+# prometheus-fastapi-instrumentator crashes walking included routers.
+
+@app.get(
+    "/v1/stats",
+    response_model=StatsResponse,
+    summary="Aggregated cost analytics",
+    tags=["analytics"],
+)
+async def stats_endpoint() -> StatsResponse:
+    """KPI totals, tier distribution, latency percentiles, cumulative savings.
+    Best-effort: returns a valid empty payload if the DB is empty/unreachable."""
+    return await compute_stats()
+
+
+@app.get(
+    "/v1/requests",
+    response_model=RequestsResponse,
+    summary="Recent request history (PII-safe)",
+    tags=["analytics"],
+)
+async def requests_endpoint(limit: int = Query(50, ge=1, le=500)) -> RequestsResponse:
+    """Most-recent-first request rows — hashed query_id only, never raw text."""
+    return await list_recent_requests(limit)
 
 
 @app.get("/", tags=["ops"], summary="Root — links to docs")

@@ -125,6 +125,19 @@ _complex_route = Route(
         "Analyze the time complexity of quicksort",
         "Explain the CAP theorem with examples",
         "What are the trade-offs between consistency and availability?",
+        # "Explain/Derive how <system> implements <mechanism>" — hard tasks that
+        # surface-read as medium because of the leading verb, but require deep
+        # multi-step reasoning. Added Week 5 after held-out eval showed 6/20
+        # complex queries under-routing to medium/simple (recall 70%). These are
+        # NEW generic phrasings, NOT copies of any eval_set.jsonl query.
+        "Explain step by step how a compiler performs register allocation",
+        "Explain how a hash table resolves collisions internally",
+        "Derive the closed-form solution for a linear recurrence relation",
+        "Implement OAuth2 authentication in a web service",
+        "Write a regular expression to parse structured log lines and explain it",
+        "Architect a scalable video streaming platform for millions of viewers",
+        "Explain how a memory allocator implements free-list coalescing",
+        "Prove the correctness of Dijkstra's shortest path algorithm",
     ],
 )
 

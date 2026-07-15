@@ -1,0 +1,60 @@
+{"query": "Who painted the Mona Lisa?", "label": "simple"}
+{"query": "What is the tallest mountain in the world?", "label": "simple"}
+{"query": "Define photosynthesis in one sentence.", "label": "simple"}
+{"query": "What does CPU stand for?", "label": "simple"}
+{"query": "What is the chemical symbol for gold?", "label": "simple"}
+{"query": "How many continents are there?", "label": "simple"}
+{"query": "What is the speed of light?", "label": "simple"}
+{"query": "When did the Berlin Wall fall?", "label": "simple"}
+{"query": "Is water a compound?", "label": "simple"}
+{"query": "What is the square root of 144?", "label": "simple"}
+{"query": "Convert 5 kilometers to miles.", "label": "simple"}
+{"query": "What language is spoken in Brazil?", "label": "simple"}
+{"query": "What does JSON stand for?", "label": "simple"}
+{"query": "Who wrote Romeo and Juliet?", "label": "simple"}
+{"query": "What is the freezing point of water in Fahrenheit?", "label": "simple"}
+{"query": "How many bones are in the human body?", "label": "simple"}
+{"query": "What is the largest planet in the solar system?", "label": "simple"}
+{"query": "Define inflation.", "label": "simple"}
+{"query": "What year did the first iPhone launch?", "label": "simple"}
+{"query": "Is a tomato a fruit?", "label": "simple"}
+{"query": "Explain how a blockchain reaches consensus.", "label": "medium"}
+{"query": "What are the main differences between HTTP and HTTPS?", "label": "medium"}
+{"query": "How does a car engine convert fuel into motion?", "label": "medium"}
+{"query": "Compare supervised and unsupervised learning.", "label": "medium"}
+{"query": "Summarize the causes of the 2008 financial crisis.", "label": "medium"}
+{"query": "Explain the water cycle to a ten-year-old.", "label": "medium"}
+{"query": "What are the trade-offs between renting and buying a home?", "label": "medium"}
+{"query": "How do vaccines train the immune system?", "label": "medium"}
+{"query": "Translate 'good morning, how are you?' into Spanish.", "label": "medium"}
+{"query": "Give me an overview of how DNS resolves a domain name.", "label": "medium"}
+{"query": "What is the difference between weather and climate?", "label": "medium"}
+{"query": "How should I prepare for a job interview?", "label": "medium"}
+{"query": "Explain the concept of compound interest.", "label": "medium"}
+{"query": "Compare electric cars and gasoline cars.", "label": "medium"}
+{"query": "What are the pros and cons of remote work?", "label": "medium"}
+{"query": "How does a refrigerator keep food cold?", "label": "medium"}
+{"query": "Summarize the plot of Hamlet.", "label": "medium"}
+{"query": "What is the difference between a stack and a queue?", "label": "medium"}
+{"query": "How do I structure a good persuasive essay?", "label": "medium"}
+{"query": "Explain why the sky is blue.", "label": "medium"}
+{"query": "Implement a binary tree with insert and search in Java.", "label": "complex"}
+{"query": "Write a Python decorator that caches function results.", "label": "complex"}
+{"query": "Design a rate limiter for a public API.", "label": "complex"}
+{"query": "Debug why this recursive function causes a stack overflow.", "label": "complex"}
+{"query": "Write a function to detect a cycle in a linked list.", "label": "complex"}
+{"query": "Architect a real-time chat application for millions of users.", "label": "complex"}
+{"query": "Write a SQL query to compute a 7-day rolling average of sales.", "label": "complex"}
+{"query": "Explain and prove the time complexity of merge sort.", "label": "complex"}
+{"query": "Write a detailed essay on the ethics of artificial intelligence.", "label": "complex"}
+{"query": "Design a database schema for a hospital management system.", "label": "complex"}
+{"query": "Refactor this nested loop into a more efficient algorithm.", "label": "complex"}
+{"query": "Implement JWT-based authentication in a Node.js API.", "label": "complex"}
+{"query": "Analyze the space-time trade-offs of hashing versus sorting for deduplication.", "label": "complex"}
+{"query": "Write a comprehensive comparison of the Paxos and Raft consensus algorithms.", "label": "complex"}
+{"query": "Create a regex to validate an email and explain each part.", "label": "complex"}
+{"query": "Design a fault-tolerant message queue from scratch.", "label": "complex"}
+{"query": "Write unit tests for a shopping cart checkout function.", "label": "complex"}
+{"query": "Explain how a garbage collector implements mark-and-sweep.", "label": "complex"}
+{"query": "Build a CLI tool in Go that watches a directory for changes.", "label": "complex"}
+{"query": "Derive the recurrence relation for the recursive Fibonacci algorithm and its complexity.", "label": "complex"}

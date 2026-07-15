@@ -46,3 +46,14 @@ Thumbs.db
 
 # ─── Eval outputs (large CSVs, not needed at runtime) ────────────────────────
 evals/results
+
+# ─── Local model / HF caches (must NOT enter build context) ──────────────────
+# The Dockerfile pre-downloads the MiniLM model at build time. A local .cache/
+# holds HuggingFace snapshots whose files are SYMLINKS into blobs/ — Docker's
+# context loader rejects these ("invalid file request"), aborting the build.
+.cache
+.cache/
+**/.cache
+.huggingface
+huggingface
+*.lock

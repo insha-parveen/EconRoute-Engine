@@ -214,3 +214,28 @@ async def log_request(
             await session.commit()
     except Exception as e:
         logger.warning(f"Request log write skipped — {type(e).__name__}: {e}")
+
+
+# ─── Read path (Week 5 — analytics endpoints) ────────────────────────────────
+
+async def fetch_logs(limit: int | None = None) -> list["RequestLog"]:
+    """
+    Read request rows, newest first. Best-effort: returns [] on any DB error or
+    empty table so the analytics endpoints can always return a valid 200 payload
+    (same contract as log_request — an analytics read must never 500).
+
+    Args:
+        limit: max rows to return (None = full history, used by /v1/stats which
+               needs every row to compute cumulative savings + percentiles).
+    """
+    try:
+        Session = _get_session()
+        async with Session() as session:
+            stmt = select(RequestLog).order_by(RequestLog.created_at.desc())
+            if limit is not None:
+                stmt = stmt.limit(limit)
+            rows = (await session.execute(stmt)).scalars().all()
+            return list(rows)
+    except Exception as e:
+        logger.warning(f"fetch_logs skipped — {type(e).__name__}: {e}")
+        return []

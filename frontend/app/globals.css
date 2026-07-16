@@ -2,23 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --tier-cache: #4e79a7;
-  --tier-simple: #59a14f;
-  --tier-medium: #f28e2b;
-  --tier-complex: #e15759;
-}
-
 html,
 body {
   padding: 0;
   margin: 0;
-  background: theme("colors.canvas");
-  color: theme("colors.ink");
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
+  background: #0a0d12;
+  color: #e8edf2;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Respect reduced-motion: kill all transitions/animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Hero demo card reveal (fade + slide). */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-reveal {
+  animation: reveal 200ms ease-out both;
+}
+
+/* Pipeline flow dot pulse. */
+@keyframes flowpulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+.animate-flow {
+  animation: flowpulse 1.2s ease-in-out infinite;
+}
+
+/* Table row entry on live update. */
+@keyframes rowin {
+  from {
+    opacity: 0;
+    background: rgba(93, 202, 165, 0.08);
+  }
+  to {
+    opacity: 1;
+    background: transparent;
+  }
+}
+.animate-rowin {
+  animation: rowin 600ms ease-out both;
 }

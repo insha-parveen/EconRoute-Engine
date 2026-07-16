@@ -106,6 +106,9 @@ class RequestLog(Base):
     model_used: Mapped[str] = mapped_column(String(128))
     cache_hit: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     fallback_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Human-readable why: "cache · cosine match" | "classifier · simple" | "fallback · ollama"
+    routing_reason: Mapped[str] = mapped_column(String(512), default="")
+    classifier_confidence: Mapped[float] = mapped_column(Float, default=0.0)
 
     # Performance
     latency_ms: Mapped[float] = mapped_column(Float)
@@ -134,6 +137,17 @@ async def init_db() -> None:
         _get_session()  # ensure engine is built
         async with _engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # create_all never alters existing tables; add Week-5 columns in place.
+            # IF NOT EXISTS keeps this idempotent (our no-Alembic stance, see CLAUDE.md).
+            # Add columns for week-5 features (IF NOT EXISTS = idempotent)
+            await conn.execute(text(
+                "ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS "
+                "routing_reason VARCHAR(512) NOT NULL DEFAULT ''"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS "
+                "classifier_confidence DOUBLE PRECISION NOT NULL DEFAULT 0.0"
+            ))
         logger.info("✅ Postgres ready — request_logs table ensured")
     except Exception as e:
         logger.warning(
@@ -183,6 +197,8 @@ async def log_request(
     baseline_cost_usd: float,
     savings_usd: float,
     savings_source: str,
+    routing_reason: str = "",
+    classifier_confidence: float = 0.0,
 ) -> None:
     """
     Insert one request row. BEST-EFFORT — swallows all errors.
@@ -209,6 +225,8 @@ async def log_request(
                     baseline_cost_usd=baseline_cost_usd,
                     savings_usd=savings_usd,
                     savings_source=savings_source,
+                    routing_reason=routing_reason,
+                    classifier_confidence=classifier_confidence,
                 )
             )
             await session.commit()
@@ -218,20 +236,39 @@ async def log_request(
 
 # ─── Read path (Week 5 — analytics endpoints) ────────────────────────────────
 
-async def fetch_logs(limit: int | None = None) -> list["RequestLog"]:
+async def fetch_logs(
+    limit: int | None = None,
+    *,
+    since: object | None = None,
+    offset: int = 0,
+    tier: str | None = None,
+    cache_hits_only: bool = False,
+    fallback_only: bool = False,
+) -> list["RequestLog"]:
     """
     Read request rows, newest first. Best-effort: returns [] on any DB error or
     empty table so the analytics endpoints can always return a valid 200 payload
     (same contract as log_request — an analytics read must never 500).
 
     Args:
-        limit: max rows to return (None = full history, used by /v1/stats which
-               needs every row to compute cumulative savings + percentiles).
+        since: datetime lower bound on created_at (time-range pills: today/7d/30d).
+        limit/offset: server-side pagination for the history table.
+        tier / cache_hits_only / fallback_only: history table filters.
     """
     try:
         Session = _get_session()
         async with Session() as session:
             stmt = select(RequestLog).order_by(RequestLog.created_at.desc())
+            if since is not None:
+                stmt = stmt.where(RequestLog.created_at >= since)
+            if tier:
+                stmt = stmt.where(RequestLog.tier == tier)
+            if cache_hits_only:
+                stmt = stmt.where(RequestLog.cache_hit.is_(True))
+            if fallback_only:
+                stmt = stmt.where(RequestLog.fallback_used.is_(True))
+            if offset:
+                stmt = stmt.offset(offset)
             if limit is not None:
                 stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
@@ -239,3 +276,29 @@ async def fetch_logs(limit: int | None = None) -> list["RequestLog"]:
     except Exception as e:
         logger.warning(f"fetch_logs skipped — {type(e).__name__}: {e}")
         return []
+
+
+async def count_logs(
+    *,
+    since: object | None = None,
+    tier: str | None = None,
+    cache_hits_only: bool = False,
+    fallback_only: bool = False,
+) -> int:
+    """Row count matching the same filters as fetch_logs (for pagination). Best-effort → 0."""
+    try:
+        Session = _get_session()
+        async with Session() as session:
+            stmt = select(func.count()).select_from(RequestLog)
+            if since is not None:
+                stmt = stmt.where(RequestLog.created_at >= since)
+            if tier:
+                stmt = stmt.where(RequestLog.tier == tier)
+            if cache_hits_only:
+                stmt = stmt.where(RequestLog.cache_hit.is_(True))
+            if fallback_only:
+                stmt = stmt.where(RequestLog.fallback_used.is_(True))
+            return int((await session.execute(stmt)).scalar_one())
+    except Exception as e:
+        logger.warning(f"count_logs skipped — {type(e).__name__}: {e}")
+        return 0

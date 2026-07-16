@@ -248,21 +248,37 @@ async def ws_requests(websocket: WebSocket):
     summary="Aggregated cost analytics",
     tags=["analytics"],
 )
-async def stats_endpoint() -> StatsResponse:
-    """KPI totals, tier distribution, latency percentiles, cumulative savings.
-    Best-effort: returns a valid empty payload if the DB is empty/unreachable."""
-    return await compute_stats()
+async def stats_endpoint(range: str | None = Query(None, pattern="^(today|7d|30d|all)$")) -> StatsResponse:
+    """KPI totals, tier + model distribution, latency percentiles, cumulative savings,
+    savings split. Best-effort: valid empty payload if the DB is empty/unreachable.
+    `range` filters by created_at (today/7d/30d/all)."""
+    return await compute_stats(range)
 
 
 @app.get(
     "/v1/requests",
     response_model=RequestsResponse,
-    summary="Recent request history (PII-safe)",
+    summary="Recent request history (PII-safe, paginated)",
     tags=["analytics"],
 )
-async def requests_endpoint(limit: int = Query(50, ge=1, le=500)) -> RequestsResponse:
-    """Most-recent-first request rows — hashed query_id only, never raw text."""
-    return await list_recent_requests(limit)
+async def requests_endpoint(
+    limit: int = Query(5, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    range: str | None = Query(None, pattern="^(today|7d|30d|all)$"),
+    tier: str | None = Query(None, pattern="^(cache|simple|medium|complex)$"),
+    cache_hits_only: bool = Query(False),
+    fallback_only: bool = Query(False),
+) -> RequestsResponse:
+    """Most-recent-first rows — hashed query_id only, never raw text. Server-paginated
+    and filterable (tier / cache-hits / fallback). Default page 1 × 5 = at-a-glance view."""
+    return await list_recent_requests(
+        limit,
+        page=page,
+        range_key=range,
+        tier=tier,
+        cache_hits_only=cache_hits_only,
+        fallback_only=fallback_only,
+    )
 
 
 @app.get("/", tags=["ops"], summary="Root — links to docs")

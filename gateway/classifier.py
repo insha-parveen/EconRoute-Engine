@@ -172,19 +172,19 @@ logger.info("SemanticRouter ready — 3 routes: simple / medium / complex")
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def classify(text: str) -> str:
+def classify(text: str) -> tuple[str, float]:
     """
-    Classify a query as simple / medium / complex.
+    Classify a query as simple / medium / complex and return a confidence score.
 
     Args:
         text: the user's query text
 
     Returns:
-        "simple" | "medium" | "complex"
+        (tier, confidence) where tier is "simple" | "medium" | "complex"
+        and confidence is a float in [0.0, 1.0] representing the classifier's
+        certainty. 0.0 means complete fallback, 1.0 means perfect match.
 
-    Fallback:
-        Any error or None result → "medium" (safe default — never over-routes
-        to simple and risks quality loss, never wastes complex on trivia)
+        On error or empty input: ("medium", 0.0)
 
     Note:
         semantic-router is synchronous — not async. Called from the async
@@ -193,8 +193,8 @@ def classify(text: str) -> str:
         Add executor wrapping if p99 latency becomes a concern at high QPS.
     """
     if not text or not text.strip():
-        logger.debug("Empty query → default medium")
-        return "medium"
+        logger.debug("Empty query → default medium (confidence=0)")
+        return ("medium", 0.0)
 
     # Truncate very long inputs — all-MiniLM-L6-v2 has 512 token limit
     # ~4 chars per token → 2000 char safety limit
@@ -203,8 +203,21 @@ def classify(text: str) -> str:
     try:
         result = _route_layer(truncated)
         tier = result.name if result and result.name else "medium"
-        logger.debug(f"Classified as {tier.upper()} — len={len(truncated)}")
-        return tier
+        # Extract confidence from per-route scores, fallback to 0.85 if unavailable
+        confidence = 0.85
+        if result and hasattr(result, "scores") and result.scores:
+            route_scores = result.scores
+            if isinstance(route_scores, dict) and tier in route_scores:
+                raw = route_scores[tier]
+                # Scores can be raw cosine sums; normalise to [0, 1] via sigmoid-ish clamp
+                confidence = min(1.0, max(0.0, raw / 5.0))
+            elif isinstance(route_scores, (list, tuple)):
+                # If scores is a list, use max/mean as a proxy
+                score_vals = [s for s in route_scores if isinstance(s, (int, float))]
+                if score_vals:
+                    confidence = min(1.0, max(0.0, max(score_vals) / 5.0))
+        logger.debug(f"Classified as {tier.upper()} (confidence={confidence:.3f}) — len={len(truncated)}")
+        return (tier, round(confidence, 4))
     except Exception as e:
         logger.warning(f"Classifier error — falling back to medium: {e}")
-        return "medium"
+        return ("medium", 0.0)

@@ -26,3 +26,5 @@ Thumbs.db
 evals/results/*.csv
 evals/results/*.json
 CLAUDE.md
+.claude/
+.cache/

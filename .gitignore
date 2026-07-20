@@ -28,3 +28,9 @@ evals/results/*.json
 CLAUDE.md
 .claude/
 .cache/
+.env
+IMPLEMENTATION_PLAN.md
+FREE_DEPLOYMENT_PLAN.md
+.env
+IMPLEMENTATION_PLAN.md
+FREE_DEPLOYMENT_PLAN.md

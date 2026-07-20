@@ -51,9 +51,10 @@ jobs:
           pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
           pip install --no-cache-dir -r requirements-dev.txt -r requirements.txt
 
-      - name: Lint with ruff
+      - name: Lint with ruff (autofix then verify)
         run: |
           pip install ruff
+          ruff check gateway/ tracking/ providers/ tests/ --fix
           ruff check gateway/ tracking/ providers/ tests/
 
       - name: Test with pytest

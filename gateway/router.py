@@ -17,12 +17,9 @@ import time
 import uuid
 import hashlib
 import logging
-import os
 from datetime import datetime, timezone
-from typing import Literal
 
-from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
-from providers.litellm_client import call_model, LLMError, LLMResponse
+from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, CostBreakdown
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
 from tracking.db import log_request as db_log_request
 from gateway.cache import find_match, store

@@ -35,8 +35,6 @@ Route design rationale:
 """
 
 import logging
-import os
-from typing import Optional
 
 from semantic_router import Route
 from semantic_router.routers import SemanticRouter

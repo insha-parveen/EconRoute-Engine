@@ -40,7 +40,6 @@ import math
 import os
 import time
 import uuid
-from functools import partial
 from typing import Optional
 
 import redis.asyncio as aioredis

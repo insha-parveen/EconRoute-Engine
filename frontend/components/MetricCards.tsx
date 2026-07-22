@@ -3,6 +3,7 @@
 // components/MetricCards.tsx — Metric strip: cache hit rate, fallback rate,
 // classifier accuracy (88.0%), total requests. Left-accent-border cards.
 
+import { EVAL } from "@/lib/types";
 import type { StatsTotals } from "@/lib/types";
 
 export default function MetricCards({ totals }: { totals: StatsTotals }) {
@@ -20,7 +21,7 @@ export default function MetricCards({ totals }: { totals: StatsTotals }) {
       />
       <MetricCard
         label="classifier accuracy"
-        value="88.0%"
+        value={`${EVAL.overall}%`}
         accent="#AFA9EC"
       />
       <MetricCard

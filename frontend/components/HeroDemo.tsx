@@ -123,7 +123,7 @@ export default function HeroDemo() {
               </span>
             </div>
             <div className="space-y-2">
-              <Row label="Actual cost" value="$0.00000" mono />
+              <Row label="Actual cost" value={`$${result.actual_cost_usd.toFixed(5)}`} mono />
               <Row label="Model used" value={result.model_used} mono small />
               <Row label="Tier" value={result.tier} />
               <Row label="Classifier confidence" value={`${(result.classifier_confidence * 100).toFixed(0)}%`} mono />

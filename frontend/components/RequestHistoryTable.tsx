@@ -7,8 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tierColor, tierBg, tierBorder, type TierKey } from "@/lib/colors";
 import type { RequestRow, RequestsResponse } from "@/lib/types";
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getRequestHistory } from "@/lib/api";
 
 type SortField = "created_at" | "tier" | "model_used" | "latency_ms" | "savings_usd";
 type FilterKey = "all" | "cache" | "fallback" | "simple" | "medium" | "complex";
@@ -22,24 +21,19 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "complex", label: "Complex" },
 ];
 
-async function fetchHistory(
-  page: number,
-  pageSize: number,
-  filter: FilterKey,
-  sortField: SortField,
-  sortDir: "asc" | "desc",
-): Promise<RequestsResponse> {
-  const params = new URLSearchParams({
-    limit: String(pageSize),
-    page: String(page),
+function sortRows(rows: RequestRow[], field: SortField, dir: "asc" | "desc"): RequestRow[] {
+  return [...rows].sort((a, b) => {
+    let cmp: number;
+    switch (field) {
+      case "created_at": cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime(); break;
+      case "model_used": cmp = a.model_used.localeCompare(b.model_used); break;
+      case "latency_ms": cmp = a.latency_ms - b.latency_ms; break;
+      case "savings_usd": cmp = a.savings_usd - b.savings_usd; break;
+      case "tier": cmp = a.tier.localeCompare(b.tier); break;
+      default: cmp = 0;
+    }
+    return dir === "asc" ? cmp : -cmp;
   });
-  if (filter === "cache") params.set("cache_hits_only", "true");
-  else if (filter === "fallback") params.set("fallback_only", "true");
-  else if (filter !== "all") params.set("tier", filter);
-
-  const res = await fetch(`${BASE}/v1/requests?${params}`, { cache: "no-store" });
-  if (!res.ok) return { requests: [], total: 0, page: 1, page_size: pageSize };
-  return (await res.json()) as RequestsResponse;
 }
 
 export default function RequestHistoryTable({
@@ -61,8 +55,9 @@ export default function RequestHistoryTable({
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const data = await fetchHistory(page, pageSize, filter, sortField, sortDir);
-    setRows(data.requests);
+    const data = await getRequestHistory(page, pageSize, filter);
+    const sorted = sortRows(data.requests, sortField, sortDir);
+    setRows(sorted);
     setTotalRows(data.total);
     setLoading(false);
   }, [page, filter, sortField, sortDir]);

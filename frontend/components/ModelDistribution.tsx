@@ -4,7 +4,7 @@
 // Always renders the ollama row even at 0% so the fallback path is visibly monitored.
 
 import type { ModelCount } from "@/lib/types";
-import { tierColor, tierBg } from "@/lib/colors";
+import { TIER_COLORS } from "@/lib/colors";
 
 export default function ModelDistribution({ data }: { data: ModelCount[] }) {
   const maxCount = Math.max(1, ...data.map((d) => d.count));
@@ -35,7 +35,7 @@ export default function ModelDistribution({ data }: { data: ModelCount[] }) {
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: isOllama ? "#5F6A76" : d.count > 0 ? "#5DCAA5" : "#1B2129",
+                    backgroundColor: isOllama ? TIER_COLORS.fallback : d.count > 0 ? TIER_COLORS.simple : "#1B2129",
                     opacity: d.count > 0 ? 1 : 0.3,
                   }}
                 />

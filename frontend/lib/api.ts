@@ -12,8 +12,9 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function getStats(): Promise<StatsResponse> {
-  return getJson<StatsResponse>("/v1/stats");
+export function getStats(range?: string): Promise<StatsResponse> {
+  const path = range ? `/v1/stats?range=${range}` : "/v1/stats";
+  return getJson<StatsResponse>(path);
 }
 
 export function getRequests(limit = 50): Promise<RequestsResponse> {

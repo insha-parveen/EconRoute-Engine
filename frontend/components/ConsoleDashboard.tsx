@@ -76,7 +76,7 @@ export default function ConsoleDashboard({
     let cancelled = false;
     const reconcile = async () => {
       try {
-        const fresh = await getStats();
+        const fresh = await getStats(range);
         if (cancelled) return;
         setStats(fresh);
       } catch {

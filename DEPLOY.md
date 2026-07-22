@@ -2,7 +2,7 @@
 
 ## Architecture
 
-```
+```text
                         ┌──────────────────────┐
                         │  Neon (Postgres)       │
                         │  Serverless · Free     │

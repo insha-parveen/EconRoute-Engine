@@ -235,7 +235,10 @@ async def route(request: ChatRequest) -> ChatResponse:
         max_tokens=request.max_tokens,
     )
     # Update tier in case fallback chain escalated (simple -> medium etc.)
-    tier = tier_used
+    if tier_used != tier:
+        tier = tier_used
+        # Reduce confidence for escalated tier since the classifier scored the original tier
+        classifier_confidence = classifier_confidence * 0.75
 
     latency_ms = (time.perf_counter() - start_time) * 1000
 

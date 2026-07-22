@@ -201,19 +201,14 @@ def classify(text: str) -> tuple[str, float]:
     try:
         result = _route_layer(truncated)
         tier = result.name if result and result.name else "medium"
-        # Extract confidence from per-route scores, fallback to 0.85 if unavailable
+        # Extract confidence from RouteChoice, using similarity_score as primary source
         confidence = 0.85
-        if result and hasattr(result, "scores") and result.scores:
-            route_scores = result.scores
-            if isinstance(route_scores, dict) and tier in route_scores:
-                raw = route_scores[tier]
-                # Scores can be raw cosine sums; normalise to [0, 1] via sigmoid-ish clamp
+        if result:
+            raw = getattr(result, "similarity_score", None)
+            if raw is None:
+                raw = getattr(result, "score", None)
+            if isinstance(raw, (int, float)):
                 confidence = min(1.0, max(0.0, raw / 5.0))
-            elif isinstance(route_scores, (list, tuple)):
-                # If scores is a list, use max/mean as a proxy
-                score_vals = [s for s in route_scores if isinstance(s, (int, float))]
-                if score_vals:
-                    confidence = min(1.0, max(0.0, max(score_vals) / 5.0))
         logger.debug(f"Classified as {tier.upper()} (confidence={confidence:.3f}) — len={len(truncated)}")
         return (tier, round(confidence, 4))
     except Exception as e:

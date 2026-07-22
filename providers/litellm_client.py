@@ -17,7 +17,6 @@ Why LiteLLM?
     Same code, different string.
 """
 
-import os
 import logging
 from typing import TypedDict
 

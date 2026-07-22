@@ -27,13 +27,6 @@ import os
 import asyncio
 from typing import Optional
 
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-)
 
 from providers.litellm_client import call_model, LLMError, LLMResponse
 from gateway.models import ChatMessage

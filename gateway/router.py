@@ -17,12 +17,9 @@ import time
 import uuid
 import hashlib
 import logging
-import os
 from datetime import datetime, timezone
-from typing import Literal
 
-from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, RouteDecision, CostBreakdown
-from providers.litellm_client import call_model, LLMError, LLMResponse
+from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, CostBreakdown
 from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
 from tracking.db import log_request as db_log_request
 from gateway.cache import find_match, store
@@ -37,17 +34,17 @@ logger = logging.getLogger(__name__)
 # Replaces Week 1 keyword heuristic with meaning-based classification.
 # "Can you tell me about Python?" → simple (keyword missed this; semantic gets it)
 
-def _classify_complexity(messages: list[ChatMessage]) -> str:
+def _classify_complexity(messages: list[ChatMessage]) -> tuple[str, float]:
     """
     Classify query complexity using semantic-router.
-    Returns: "simple" | "medium" | "complex"
+    Returns: ("simple" | "medium" | "complex", confidence: float)
 
-    Extracts last user message → passes to classify() in classifier.py.
-    Falls back to "medium" on empty input or classifier error (handled inside classify()).
+    Extracts last user message -> passes to classify() in classifier.py.
+    Falls back to ("medium", 0.0) on empty input or classifier error.
     """
     user_messages = [m for m in messages if m.role == "user"]
     if not user_messages:
-        return "medium"
+        return ("medium", 0.0)
 
     last_user_msg = user_messages[-1].content
     return classify(last_user_msg)
@@ -95,6 +92,7 @@ async def _log_request(
     *,
     fallback_used: bool,
     query_id: str,
+    routing_reason: str = "",
 ) -> None:
     """
     Console summary + best-effort Postgres insert (Week 4).
@@ -128,6 +126,8 @@ async def _log_request(
         baseline_cost_usd=response.baseline_cost_usd,
         savings_usd=response.savings_usd,
         savings_source=response.savings_source,
+        routing_reason=routing_reason,
+        classifier_confidence=response.classifier_confidence,
     )
 
     # Week 5: push a PII-safe summary to the real-time live feed. Fire-and-forget
@@ -151,6 +151,8 @@ async def _log_request(
             "baseline_cost_usd": response.baseline_cost_usd,
             "savings_usd": response.savings_usd,
             "savings_source": response.savings_source,
+            "routing_reason": routing_reason,
+            "classifier_confidence": response.classifier_confidence,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -166,15 +168,15 @@ async def route(request: ChatRequest) -> ChatResponse:
 
     Steps:
       1. Check semantic cache (Week 2 — Redis cosine similarity)
-      2. Classify complexity → tier
+      2. Classify complexity -> tier + confidence
       3. Call model via LiteLLM (with Ollama fallback attempt)
       4. Compute costs
-      5. Log (console in Week 1)
+      5. Log + broadcast
       6. Return full ChatResponse
 
     Edge cases:
-      - Groq fails → try Ollama fallback if FALLBACK_TO_OLLAMA=true
-      - Ollama also fails → raise original LLMError (500 to client)
+      - Groq fails -> try Ollama fallback if FALLBACK_TO_OLLAMA=true
+      - Ollama also fails -> raise original LLMError (500 to client)
     """
     start_time = time.perf_counter()
     request_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
@@ -199,6 +201,9 @@ async def route(request: ChatRequest) -> ChatResponse:
             cache_hit=True,
         )
 
+        # Why this path was taken — human-readable, shown as a pill in the UI.
+        routing_reason = "cache · cosine match"
+
         response = _build_response(
             request_id=request_id,
             request=request,
@@ -209,12 +214,16 @@ async def route(request: ChatRequest) -> ChatResponse:
             fallback_used=False,
             latency_ms=latency_ms,
             costs=costs,
+            routing_reason=routing_reason,
+            classifier_confidence=1.0,  # cache hit is deterministic
         )
-        await _log_request(response, fallback_used=False, query_id=query_id)
+        await _log_request(
+            response, fallback_used=False, query_id=query_id, routing_reason=routing_reason
+        )
         return response
 
     # ── Step 2: Classify Complexity ──────────────────────────────────────────
-    tier = _classify_complexity(request.messages)
+    tier, classifier_confidence = _classify_complexity(request.messages)
 
     # ── Step 3: Call Model (with full fallback chain) ───────────────────────
     # call_with_fallback handles: backoff on rate limits, tier escalation,
@@ -225,8 +234,11 @@ async def route(request: ChatRequest) -> ChatResponse:
         temperature=request.temperature or 0.7,
         max_tokens=request.max_tokens,
     )
-    # Update tier in case fallback chain escalated (simple → medium etc.)
-    tier = tier_used
+    # Update tier in case fallback chain escalated (simple -> medium etc.)
+    if tier_used != tier:
+        tier = tier_used
+        # Reduce confidence for escalated tier since the classifier scored the original tier
+        classifier_confidence = classifier_confidence * 0.75
 
     latency_ms = (time.perf_counter() - start_time) * 1000
 
@@ -242,6 +254,10 @@ async def route(request: ChatRequest) -> ChatResponse:
     await _store_cache(request.messages, llm_response["content"], tier=tier)
 
     # ── Step 6: Build + log + return ─────────────────────────────────────────
+    routing_reason = (
+        f"fallback · {tier}" if fallback_used else f"classifier · {tier}"
+    )
+
     response = _build_response(
         request_id=request_id,
         request=request,
@@ -252,8 +268,12 @@ async def route(request: ChatRequest) -> ChatResponse:
         fallback_used=fallback_used,
         latency_ms=latency_ms,
         costs=costs,
+        routing_reason=routing_reason,
+        classifier_confidence=classifier_confidence,
     )
-    await _log_request(response, fallback_used=fallback_used, query_id=query_id)
+    await _log_request(
+        response, fallback_used=fallback_used, query_id=query_id, routing_reason=routing_reason
+    )
     return response
 
 
@@ -269,9 +289,12 @@ def _build_response(
     fallback_used: bool,
     latency_ms: float,
     costs: CostBreakdown,
+    routing_reason: str = "",
+    classifier_confidence: float = 0.0,
 ) -> ChatResponse:
     """Assemble the full ChatResponse from all computed parts."""
     return ChatResponse(
+        routing_reason=routing_reason,
         id=request_id,
         object="chat.completion",
         model=request.model,
@@ -286,6 +309,7 @@ def _build_response(
         tier=tier,
         cache_hit=cache_hit,
         latency_ms=round(latency_ms, 2),
+        classifier_confidence=classifier_confidence,
         actual_cost_usd=costs.actual_cost_usd,
         theoretical_cost_usd=costs.theoretical_cost_usd,
         baseline_cost_usd=costs.baseline_cost_usd,

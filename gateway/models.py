@@ -119,6 +119,10 @@ class ChatResponse(BaseModel):
     tier: str                          # "cache" | "simple" | "medium" | "complex"
     cache_hit: bool
     latency_ms: float
+    routing_reason: str = ""           # "cache · cosine match" | "classifier · simple" | "fallback · ..."
+
+    # Classifier metadata
+    classifier_confidence: float = 0.0  # semantic-router confidence score [0, 1]
 
     # Cost fields (flat, for easy dashboard consumption)
     actual_cost_usd: float
@@ -172,6 +176,7 @@ class StatsTotals(BaseModel):
     baseline_usd: float = 0.0
     savings_pct: float = 0.0          # savings / baseline * 100
     cache_hit_rate: float = 0.0       # % of requests served from cache
+    fallback_rate: float = 0.0        # % of requests that used the Ollama fallback
     actual_spend: float = 0.0         # always 0 — Groq/Ollama are free
 
 
@@ -197,6 +202,21 @@ class CacheHitMiss(BaseModel):
     miss: int = 0
 
 
+class ModelCount(BaseModel):
+    """Traffic per ACTUAL model served (distinct from tier routing decisions)."""
+    model: str
+    count: int
+    pct: float
+
+
+class SavingsSplit(BaseModel):
+    """Where savings came from: cache hits vs cheaper-model routing."""
+    cache_usd: float = 0.0
+    routing_usd: float = 0.0
+    cache_pct: float = 0.0
+    routing_pct: float = 0.0
+
+
 class StatsResponse(BaseModel):
     """Aggregated analytics for the dashboard — mirrors the Streamlit computations."""
     totals: StatsTotals = Field(default_factory=StatsTotals)
@@ -204,6 +224,8 @@ class StatsResponse(BaseModel):
     latency_percentiles: list[LatencyPercentile] = Field(default_factory=list)
     cumulative_savings: list[CumulativePoint] = Field(default_factory=list)
     cache_hit_vs_miss: CacheHitMiss = Field(default_factory=CacheHitMiss)
+    model_distribution: list[ModelCount] = Field(default_factory=list)
+    savings_split: SavingsSplit = Field(default_factory=SavingsSplit)
 
 
 class RequestRow(BaseModel):
@@ -214,6 +236,7 @@ class RequestRow(BaseModel):
     query_id: str
     cache_hit: bool
     fallback_used: bool
+    routing_reason: str = ""
     latency_ms: float
     input_tokens: int
     output_tokens: int
@@ -225,3 +248,6 @@ class RequestRow(BaseModel):
 
 class RequestsResponse(BaseModel):
     requests: list[RequestRow] = Field(default_factory=list)
+    total: int = 0                    # total rows matching the filter (for pagination)
+    page: int = 1
+    page_size: int = 5

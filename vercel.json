@@ -1,0 +1,15 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://econroute.up.railway.app",
+    "NEXT_PUBLIC_WS_URL": "wss://econroute.up.railway.app/ws/requests"
+  }
+}

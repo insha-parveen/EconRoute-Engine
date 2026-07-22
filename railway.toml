@@ -1,0 +1,24 @@
+# railway.toml — EconRoute backend on Railway
+# https://docs.railway.app/develop/deploy
+
+[build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile.prod"
+
+[deploy]
+  startCommand = "uvicorn gateway.main:app --host 0.0.0.0 --port $PORT --workers 2"
+  healthcheckPath = "/health"
+  restartPolicyType = "always"
+
+[keepAlive]
+  enabled = true  # Keep WebSocket connections alive
+
+# Environment variables set via Railway Dashboard or CLI:
+#   railway variables set KEY=VALUE
+#
+# Required:
+#   GROQ_API_KEY     — from https://console.groq.com
+#   DATABASE_URL     — from https://neon.tech (Postgres)
+#   REDIS_URL        — from https://upstash.com (Redis)
+#   LOG_LEVEL        — INFO
+#   FALLBACK_TO_OLLAMA — false

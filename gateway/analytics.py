@@ -21,18 +21,21 @@ DB is empty or unreachable — an analytics read must never surface a 500.
 import logging
 import math
 from collections import Counter, defaultdict
+from datetime import datetime, timedelta, timezone
 
 from gateway.models import (
     CacheHitMiss,
     CumulativePoint,
     LatencyPercentile,
+    ModelCount,
     RequestRow,
     RequestsResponse,
+    SavingsSplit,
     StatsResponse,
     StatsTotals,
     TierCount,
 )
-from tracking.db import fetch_logs
+from tracking.db import count_logs, fetch_logs
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,33 @@ logger = logging.getLogger(__name__)
 # Cap on cumulative-savings points sent to the browser. Beyond this we downsample
 # evenly but always keep the last point, so the final cumulative total is exact.
 _MAX_TIMESERIES_POINTS = 200
+
+# The three Groq tiers + the Ollama fallback. The model-distribution card always
+# renders every one of these (even at 0 traffic) so the fallback path is visibly
+# monitored. Source of truth: providers/model_config.py.
+_KNOWN_MODELS = [
+    "groq/openai/gpt-oss-20b",
+    "groq/llama-3.3-70b-versatile",
+    "groq/openai/gpt-oss-120b",
+    "ollama (fallback)",
+]
+
+
+def since_from_range(range_key: str | None) -> datetime | None:
+    """Map the UI's time-range pills to a created_at lower bound (None = all)."""
+    now = datetime.now(timezone.utc)
+    if range_key == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if range_key == "7d":
+        return now - timedelta(days=7)
+    if range_key == "30d":
+        return now - timedelta(days=30)
+    return None  # "all" / unknown
+
+
+def _distribution_key(model_used: str) -> str:
+    """Collapse any ollama/* model into one fallback bucket; cache rows excluded."""
+    return "ollama (fallback)" if model_used.startswith("ollama") else model_used
 
 
 def _pandas_quantile(sorted_vals: list[float], q: float) -> float:
@@ -66,10 +96,11 @@ def _pandas_quantile(sorted_vals: list[float], q: float) -> float:
     return float(sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * frac)
 
 
-async def compute_stats() -> StatsResponse:
-    """KPI totals + charts data. Empty/valid payload when there are no rows."""
+async def compute_stats(range_key: str | None = None) -> StatsResponse:
+    """KPI totals + charts data for a time range. Empty/valid payload when no rows."""
     try:
-        rows = await fetch_logs()  # full history, newest first
+        since = since_from_range(range_key)
+        rows = await fetch_logs(since=since)  # full window, newest first
         if not rows:
             return StatsResponse()
 
@@ -77,6 +108,7 @@ async def compute_stats() -> StatsResponse:
         total_savings = sum(r.savings_usd for r in rows)
         total_baseline = sum(r.baseline_cost_usd for r in rows)
         cache_hits = sum(1 for r in rows if r.cache_hit)
+        fallbacks = sum(1 for r in rows if r.fallback_used)
 
         totals = StatsTotals(
             requests=total,
@@ -84,12 +116,39 @@ async def compute_stats() -> StatsResponse:
             baseline_usd=round(total_baseline, 8),
             savings_pct=round(total_savings / total_baseline * 100, 2) if total_baseline else 0.0,
             cache_hit_rate=round(cache_hits / total * 100, 2) if total else 0.0,
+            fallback_rate=round(fallbacks / total * 100, 2) if total else 0.0,
             actual_spend=0.0,
         )
 
-        # ── Tier distribution ────────────────────────────────────────────────
+        # ── Tier distribution (routing decision) ─────────────────────────────
         tier_counts = Counter(r.tier for r in rows)
         tier_distribution = [TierCount(tier=t, count=c) for t, c in tier_counts.items()]
+
+        # ── Model distribution (actual model traffic) ────────────────────────
+        # Exclude cache rows (no model served). Always render every known model —
+        # including ollama at 0 — so the fallback path stays visibly monitored.
+        served = [r for r in rows if not r.cache_hit]
+        model_counts = Counter(_distribution_key(r.model_used) for r in served)
+        served_total = len(served)
+        seen = set(model_counts) | set(_KNOWN_MODELS)
+        model_distribution = [
+            ModelCount(
+                model=m,
+                count=model_counts.get(m, 0),
+                pct=round(model_counts.get(m, 0) / served_total * 100, 1) if served_total else 0.0,
+            )
+            for m in sorted(seen, key=lambda m: (m not in _KNOWN_MODELS, _KNOWN_MODELS.index(m) if m in _KNOWN_MODELS else 0))
+        ]
+
+        # ── Savings split: cache vs routing ──────────────────────────────────
+        cache_savings = sum(r.savings_usd for r in rows if r.savings_source == "cache")
+        routing_savings = total_savings - cache_savings
+        savings_split = SavingsSplit(
+            cache_usd=round(cache_savings, 8),
+            routing_usd=round(routing_savings, 8),
+            cache_pct=round(cache_savings / total_savings * 100, 1) if total_savings else 0.0,
+            routing_pct=round(routing_savings / total_savings * 100, 1) if total_savings else 0.0,
+        )
 
         # ── Latency percentiles per tier (pandas-linear parity) ──────────────
         by_tier: dict[str, list[float]] = defaultdict(list)
@@ -121,7 +180,6 @@ async def compute_stats() -> StatsResponse:
             )
         cumulative_savings = _downsample(full_series, _MAX_TIMESERIES_POINTS)
 
-        # ── Cache hit vs miss ────────────────────────────────────────────────
         cache_hit_vs_miss = CacheHitMiss(hit=cache_hits, miss=total - cache_hits)
 
         return StatsResponse(
@@ -130,17 +188,49 @@ async def compute_stats() -> StatsResponse:
             latency_percentiles=latency_percentiles,
             cumulative_savings=cumulative_savings,
             cache_hit_vs_miss=cache_hit_vs_miss,
+            model_distribution=model_distribution,
+            savings_split=savings_split,
         )
     except Exception as e:  # belt-and-suspenders on top of fetch_logs's own guard
         logger.warning(f"/v1/stats degraded to empty — {type(e).__name__}: {e}")
         return StatsResponse()
 
 
-async def list_recent_requests(limit: int = 50) -> RequestsResponse:
-    """Most-recent-first request rows. PII-safe: hashed query_id only."""
+async def list_recent_requests(
+    limit: int = 5,
+    *,
+    page: int = 1,
+    range_key: str | None = None,
+    tier: str | None = None,
+    cache_hits_only: bool = False,
+    fallback_only: bool = False,
+) -> RequestsResponse:
+    """
+    Paginated, filtered request history. PII-safe: hashed query_id only.
+    Default (page 1, limit 5, no filters) = the "at a glance" 5-most-recent view.
+    """
     try:
-        rows = await fetch_logs(limit=limit)
+        since = since_from_range(range_key)
+        page = max(1, page)
+        offset = (page - 1) * limit
+        rows = await fetch_logs(
+            limit=limit,
+            offset=offset,
+            since=since,
+            tier=tier,
+            cache_hits_only=cache_hits_only,
+            fallback_only=fallback_only,
+        )
+        total = await count_logs(
+            since=since,
+            tier=tier,
+            cache_hits_only=cache_hits_only,
+            fallback_only=fallback_only,
+        )
         return RequestsResponse(
+            total=total,
+            page=page,
+            page_size=limit,
             requests=[
                 RequestRow(
                     created_at=r.created_at.isoformat(),
@@ -149,6 +239,7 @@ async def list_recent_requests(limit: int = 50) -> RequestsResponse:
                     query_id=r.query_id,
                     cache_hit=r.cache_hit,
                     fallback_used=r.fallback_used,
+                    routing_reason=r.routing_reason or "",
                     latency_ms=r.latency_ms,
                     input_tokens=r.input_tokens,
                     output_tokens=r.output_tokens,
@@ -158,7 +249,7 @@ async def list_recent_requests(limit: int = 50) -> RequestsResponse:
                     savings_source=r.savings_source,
                 )
                 for r in rows
-            ]
+            ],
         )
     except Exception as e:
         logger.warning(f"/v1/requests degraded to empty — {type(e).__name__}: {e}")

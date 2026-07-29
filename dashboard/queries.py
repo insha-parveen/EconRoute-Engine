@@ -14,8 +14,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,7 @@ def get_totals(engine: Any, since: datetime | None = None) -> dict[str, Any]:
                 "fallback_rate": round(row["fallback_rate"] * 100, 2),
                 "actual_spend": 0.0,
             }
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         logger.warning(f"get_totals failed — {e}")
         return {"requests": 0, "savings_usd": 0.0, "baseline_usd": 0.0,
                 "savings_pct": 0.0, "cache_hit_rate": 0.0, "fallback_rate": 0.0, "actual_spend": 0.0}
@@ -91,7 +90,7 @@ def get_tier_distribution(engine: Any, since: datetime | None = None) -> list[di
         with engine.connect() as conn:
             rows = conn.execute(query, params).mappings().all()
             return [dict(r) for r in rows]
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         logger.warning(f"get_tier_distribution failed — {e}")
         return []
 
@@ -142,7 +141,7 @@ def get_model_distribution(engine: Any, since: datetime | None = None) -> list[d
                     "pct": round(count / served_total * 100, 1) if served_total else 0.0,
                 })
             return result
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         logger.warning(f"get_model_distribution failed — {e}")
         return [{"model": m, "count": 0, "pct": 0.0} for m in _KNOWN_MODELS]
 
@@ -169,7 +168,7 @@ def get_savings_split(engine: Any, since: datetime | None = None) -> dict[str, A
                 "cache_pct": round(row["cache_usd"] / total * 100, 1) if total else 0.0,
                 "routing_pct": round(row["routing_usd"] / total * 100, 1) if total else 0.0,
             }
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         logger.warning(f"get_savings_split failed — {e}")
         return {"cache_usd": 0.0, "routing_usd": 0.0, "cache_pct": 0.0, "routing_pct": 0.0}
 
@@ -245,6 +244,6 @@ def get_request_history(
                 "page": page,
                 "page_size": page_size,
             }
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         logger.warning(f"get_request_history failed — {e}")
         return {"requests": [], "total": 0, "page": page, "page_size": page_size}

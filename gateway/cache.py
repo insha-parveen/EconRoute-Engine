@@ -97,7 +97,7 @@ async def check_redis() -> str:
     try:
         await _redis_client.ping()
         return "connected"
-    except Exception as e:
+    except (RedisError, OSError) as e:
         logger.warning(f"Redis health check failed — {type(e).__name__}: {e}")
         return "error"
 
@@ -110,7 +110,7 @@ async def close_redis() -> None:
     try:
         await _redis_client.aclose()
         logger.info("Redis client closed")
-    except Exception as e:
+    except (RedisError, OSError) as e:
         logger.warning(f"Redis close failed — {type(e).__name__}: {e}")
 
 
@@ -247,7 +247,7 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
 
     try:
         query_vec = await embed_async(query_text)
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError) as e:
         logger.warning(f"Cache embed failed — {type(e).__name__}: {e}")
         return None
 
@@ -296,9 +296,9 @@ async def find_match(messages: list[ChatMessage]) -> Optional[str]:
         )
         return None
 
-    except Exception as e:
+    except (RedisError, OSError) as e:
         # Redis down / timeout / connection refused → safe to skip cache
-        logger.warning(f"Cache lookup failed (Redis error?) — {e}")
+        logger.warning(f"Cache lookup failed (Redis error?) — {type(e).__name__}: {e}")
         return None
 
 
@@ -341,5 +341,5 @@ async def store(
             f"Cache STORE — key={key} tier={tier} "
             f"ttl={_TTL}s query={_query_id(query_text)}"
         )
-    except Exception as e:
+    except (RedisError, RuntimeError, OSError, ValueError) as e:
         logger.warning(f"Cache store failed — {type(e).__name__}: {e}")

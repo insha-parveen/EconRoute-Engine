@@ -55,8 +55,10 @@ class ConnectionManager:
         for ws in targets:
             try:
                 await ws.send_json(message)
-            except Exception:
-                dead.append(ws)  # closed/broken socket — prune below
+            except (WebSocketException, WebSocketDisconnect, RuntimeError) as e:
+                # closed/broken socket — prune below
+                dead.append(ws)
+                logger.debug(f"WS send_json failed for a client — {type(e).__name__}: {e}")
 
         if dead:
             async with self._lock:
@@ -81,5 +83,5 @@ async def broadcast_request_event(event: dict[str, Any]) -> None:
     """
     try:
         await manager.broadcast(event)
-    except Exception as e:
+    except (WebSocketException, WebSocketDisconnect, RuntimeError, ValueError, TypeError) as e:
         logger.warning(f"WS broadcast skipped — {type(e).__name__}: {e}")

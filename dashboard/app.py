@@ -60,7 +60,7 @@ def load_logs() -> pd.DataFrame:
             return pd.read_sql(
                 text("SELECT * FROM request_logs ORDER BY created_at DESC"), conn
             )
-    except Exception as e:  # table not created yet / DB down
+    except (SQLAlchemyError, OSError) as e:  # table not created yet / DB down
         st.warning(f"Could not read request_logs yet: {type(e).__name__}: {e}")
         return pd.DataFrame()
 

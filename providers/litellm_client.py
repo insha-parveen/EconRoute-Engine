@@ -23,8 +23,8 @@ from typing import TypedDict
 import litellm
 from litellm import acompletion
 
-from providers.model_config import GROQ_TIERS, OLLAMA_TIERS
 from gateway.models import ChatMessage
+from providers.model_config import GROQ_TIERS, OLLAMA_TIERS
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ async def call_model(
         raise LLMError(f"Connection error for {model_str}: {e}") from e
     except litellm.exceptions.Timeout as e:
         raise LLMError(f"Timeout calling {model_str}: {e}") from e
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         raise LLMError(f"Unexpected error calling {model_str}: {e}") from e
 
     # ── Extract content ──────────────────────────────────────────────────────

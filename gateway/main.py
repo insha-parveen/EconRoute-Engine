@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from gateway.analytics import compute_stats, list_recent_requests
 from gateway.cache import check_redis, close_redis
 from gateway.models import (
     ChatRequest,
@@ -37,7 +38,6 @@ from gateway.router import route
 from providers.litellm_client import LLMError
 from tracking.db import check_db, dispose_engine, init_db
 from websocket.manager import manager
-from gateway.analytics import compute_stats, list_recent_requests
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 # Do this before anything else so all modules inherit the config.
@@ -232,7 +232,7 @@ async def ws_requests(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-    except Exception:
+    except (WebSocketException, RuntimeError):
         # Any other transport error → treat as a disconnect and prune the socket.
         await manager.disconnect(websocket)
 

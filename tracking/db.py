@@ -32,6 +32,8 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.exc import SQLAlchemyError
+from asyncpg.exceptions import PostgresError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -149,7 +151,7 @@ async def init_db() -> None:
                 "classifier_confidence DOUBLE PRECISION NOT NULL DEFAULT 0.0"
             ))
         logger.info("✅ Postgres ready — request_logs table ensured")
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(
             f"⚠️  init_db skipped — Postgres unreachable ({type(e).__name__}: {e}). "
             f"Gateway will run; request logging disabled until DB is back."
@@ -163,7 +165,7 @@ async def dispose_engine() -> None:
     try:
         await _engine.dispose()
         logger.info("Postgres engine disposed")
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(f"Engine dispose failed — {type(e).__name__}: {e}")
 
 
@@ -174,7 +176,7 @@ async def check_db() -> str:
         async with _engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return "connected"
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(f"DB health check failed — {type(e).__name__}: {e}")
         return "error"
 
@@ -230,7 +232,7 @@ async def log_request(
                 )
             )
             await session.commit()
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(f"Request log write skipped — {type(e).__name__}: {e}")
 
 
@@ -273,7 +275,7 @@ async def fetch_logs(
                 stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return list(rows)
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(f"fetch_logs skipped — {type(e).__name__}: {e}")
         return []
 
@@ -299,6 +301,6 @@ async def count_logs(
             if fallback_only:
                 stmt = stmt.where(RequestLog.fallback_used.is_(True))
             return int((await session.execute(stmt)).scalar_one())
-    except (SQLAlchemyError, OSError) as e:
+    except (SQLAlchemyError, OSError, PostgresError) as e:
         logger.warning(f"count_logs skipped — {type(e).__name__}: {e}")
         return 0

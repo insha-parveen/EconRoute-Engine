@@ -24,6 +24,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 DB_URL = os.getenv(

@@ -191,7 +191,7 @@ async def compute_stats(range_key: str | None = None) -> StatsResponse:
             model_distribution=model_distribution,
             savings_split=savings_split,
         )
-    except Exception as e:  # belt-and-suspenders on top of fetch_logs's own guard
+    except (ValueError, TypeError, ZeroDivisionError) as e:  # belt-and-suspenders on top of fetch_logs's own guard
         logger.warning(f"/v1/stats degraded to empty — {type(e).__name__}: {e}")
         return StatsResponse()
 
@@ -251,7 +251,7 @@ async def list_recent_requests(
                 for r in rows
             ],
         )
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         logger.warning(f"/v1/requests degraded to empty — {type(e).__name__}: {e}")
         return RequestsResponse()
 

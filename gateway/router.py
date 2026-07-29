@@ -13,18 +13,25 @@ Design: route() is the single entry point called by main.py.
 All complexity lives here, main.py stays clean.
 """
 
-import time
-import uuid
 import hashlib
 import logging
+import time
+import uuid
 from datetime import datetime, timezone
 
-from gateway.models import ChatRequest, ChatResponse, ChatResponseChoice, ChatMessage, CostBreakdown
-from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
-from tracking.db import log_request as db_log_request
 from gateway.cache import find_match, store
+from redis.exceptions import RedisError
 from gateway.classifier import classify
 from gateway.fallback import call_with_fallback
+from gateway.models import (
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    ChatResponseChoice,
+    CostBreakdown,
+)
+from tracking.cost_calculator import compute_costs, estimate_tokens_from_text
+from tracking.db import log_request as db_log_request
 from websocket.manager import broadcast_request_event
 
 logger = logging.getLogger(__name__)
@@ -70,7 +77,7 @@ async def _store_cache(messages: list[ChatMessage], response_text: str, tier: st
     """
     try:
         await store(messages, response_text, tier=tier)
-    except Exception as e:
+    except (RedisError, RuntimeError, OSError, ValueError) as e:
         logger.warning(f"Cache store skipped — {type(e).__name__}: {e}")
 
 

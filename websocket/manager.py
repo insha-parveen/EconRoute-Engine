@@ -23,6 +23,7 @@ import logging
 from typing import Any
 
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,10 @@ class ConnectionManager:
         for ws in targets:
             try:
                 await ws.send_json(message)
-            except Exception:
-                dead.append(ws)  # closed/broken socket — prune below
+            except (WebSocketDisconnect, RuntimeError) as e:
+                # closed/broken socket — prune below
+                dead.append(ws)
+                logger.debug(f"WS send_json failed for a client — {type(e).__name__}: {e}")
 
         if dead:
             async with self._lock:
@@ -81,5 +84,5 @@ async def broadcast_request_event(event: dict[str, Any]) -> None:
     """
     try:
         await manager.broadcast(event)
-    except Exception as e:
+    except (WebSocketDisconnect, RuntimeError, ValueError, TypeError) as e:
         logger.warning(f"WS broadcast skipped — {type(e).__name__}: {e}")

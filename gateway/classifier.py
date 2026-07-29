@@ -37,8 +37,8 @@ Route design rationale:
 import logging
 
 from semantic_router import Route
-from semantic_router.routers import SemanticRouter
 from semantic_router.encoders import HuggingFaceEncoder
+from semantic_router.routers import SemanticRouter
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +211,6 @@ def classify(text: str) -> tuple[str, float]:
                 confidence = min(1.0, max(0.0, raw / 5.0))
         logger.debug(f"Classified as {tier.upper()} (confidence={confidence:.3f}) — len={len(truncated)}")
         return (tier, round(confidence, 4))
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError) as e:
         logger.warning(f"Classifier error — falling back to medium: {e}")
         return ("medium", 0.0)

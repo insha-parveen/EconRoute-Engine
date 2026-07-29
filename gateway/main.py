@@ -232,7 +232,7 @@ async def ws_requests(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-    except (WebSocketException, RuntimeError):
+    except RuntimeError:
         # Any other transport error → treat as a disconnect and prune the socket.
         await manager.disconnect(websocket)
 

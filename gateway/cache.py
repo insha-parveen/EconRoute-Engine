@@ -43,6 +43,7 @@ import uuid
 from typing import Optional
 
 import redis.asyncio as aioredis
+from redis.exceptions import RedisError
 from sentence_transformers import SentenceTransformer
 
 from gateway.models import ChatMessage

@@ -1,265 +1,408 @@
-# EconRoute — LLM Cost + Latency Optimisation Engine
+# EconRoute
 
-> Routes every LLM request to the cheapest open-source model capable of handling it.
-> Zero actual API spend. Full cost analytics against a GPT-4o baseline.
+<p align="center">
+  <img src="docs/images/architecture.png" width="1100" alt="EconRoute architecture overview" />
+</p>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/your-username/econroute/ci.yml?label=CI)](https://github.com/your-username/econroute)
-[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://econroute.up.railway.app)
-[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://python.org)
-[![Models](https://img.shields.io/badge/models-open--source%20only-orange)](https://console.groq.com)
-[![Cost](https://img.shields.io/badge/API%20spend-%240.00-brightgreen)](https://console.groq.com)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<p align="center">
+  <a href="https://github.com/insha-parveen/EconRoute-Engine"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+" /></a>
+  <a href="https://github.com/insha-parveen/EconRoute-Engine"><img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  <a href="https://github.com/insha-parveen/EconRoute-Engine"><img src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white" alt="Redis" /></a>
+  <a href="https://github.com/insha-parveen/EconRoute-Engine"><img src="https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white" alt="Next.js 14" /></a>
+  <a href="https://github.com/insha-parveen/EconRoute-Engine/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-7c3aed" alt="MIT License" /></a>
+</p>
 
----
+<p align="center">
+  <strong>Routes every LLM request to the cheapest capable model.</strong><br>
+  Zero actual spend, real-time savings analytics, and a fully OpenAI-compatible gateway.
+</p>
 
-## Why this exists
-
-- **The problem:** A query answerable by an 8B model at $0.0003 gets routed to GPT-4o at $0.03 — 100× more expensive — because most applications have no routing layer. At 1,000 req/day that's ~$10,950/year wasted.
-- **What existing tools miss:** Semantic caches exist. Model proxies exist. Nothing open-source combines semantic caching + complexity routing + quality evaluation + a live cost savings dashboard in one deployable service — on entirely free models.
-- **What EconRoute does:** Drop-in replacement for any OpenAI SDK call. Change `base_url`, nothing else. Every request flows through cache → classify → route → log → live dashboard showing theoretical savings vs GPT-4o.
-
-### Cost model — how savings work with free models
-
-EconRoute runs entirely on free inference (Groq free tier + local Ollama). Actual spend is always **$0.00**.
-
-Cost figures show **theoretical savings** — what the same requests would cost on equivalent paid APIs, vs a GPT-4o baseline. This uses published pricing as a rate card and is the standard approach for demonstrating routing value in a cost-neutral environment.
-
-```
-Actual spend                  =  $0.00   (Groq / Ollama — free)
-Theoretical cost (routed)     =  token_count × equivalent-paid-tier rate
-Baseline cost (all GPT-4o)    =  token_count × GPT-4o rate ($0.005/1K input)
-Theoretical savings           =  baseline − routed theoretical cost
-Savings from cache            =  baseline × cache_hits   (zero inference cost)
-Savings from smart routing    =  baseline − routed_theoretical × non-cache requests
-```
-
-The dashboard surfaces all three numbers — actual spend, theoretical routed cost, and baseline — so the methodology is always transparent.
+> EconRoute is an intelligent LLM routing system built to minimize cost without sacrificing quality. It checks a semantic cache first, classifies request complexity, routes to the cheapest viable model on free Groq infrastructure, falls back to local Ollama if needed, and logs every request for live economic analysis.
 
 ---
 
-## Architecture
+## Why this project exists
 
+Most applications pay for premium LLMs even when a smaller or cheaper model would work. That creates unnecessary cost, slower user experiences, and a poor cost-to-quality ratio.
+
+EconRoute solves that by combining:
+
+1. Semantic caching for repeated prompts
+2. Complexity-aware routing using semantic classification
+3. Real-time analytics that compare routing value against a GPT-4o baseline
+
+The result is a drop-in OpenAI-compatible gateway that keeps the developer experience simple while adding smart decision-making under the hood.
+
+---
+
+## Demo video and architecture
+
+<p align="center">
+  <video
+    src="docs/videos/econroute-demo.mp4"
+    poster="docs/images/architecture.png"
+    controls
+    playsinline
+    preload="metadata"
+    style="display:block; max-width:100%; width:960px; height:auto; border-radius:12px; background:#0b1220;"
+  >
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+<p align="center">
+  <img src="docs/images/architecture.png" width="1000" alt="EconRoute live architecture demonstration" />
+</p>
+
+---
+
+## System overview
+
+```mermaid
+flowchart LR
+    A[Incoming request] --> B[Semantic cache]
+    B -->|Hit| C[Return in ~15ms]
+    B -->|Miss| D[Complexity classifier]
+    D --> E{Simple / Medium / Complex}
+    E --> F[Groq free-tier model]
+    E --> G[Ollama fallback]
+    F --> H[Cost calculator]
+    G --> H
+    H --> I[Postgres + live dashboard]
 ```
-Incoming request  (POST /v1/chat/completions — OpenAI-compatible)
-        |
-        v
-+------------------------------------------+
-|  1. Semantic cache                       |  Redis + sentence-transformers (local)
-|     cosine similarity threshold: 0.92    |  HIT -> return in <20 ms, $0 cost
-|     theoretical saving = baseline cost   |  MISS -> continue
-+---------------------+--------------------+
-                      | MISS
-                      v
-+------------------------------------------+
-|  2. Complexity classifier                |  semantic-router (local, zero-shot)
-|     simple / medium / complex            |
-+------+-------------+---------------------+
-       |             |                |
-       v             v                v
-Groq:llama-3.1   Groq:llama-3.3   Groq:deepseek-r1
--8b-instant      -70b-versatile   -distill-llama-70b
-Simple tier      Medium tier      Complex tier
-$0 actual        $0 actual        $0 actual
-~$0.0003 theor.  ~$0.003 theor.   ~$0.030 theor.
-       |             |                |
-       +-------------+----------------+
-                     | on error -> escalate + Ollama fallback
-                     v
-+------------------------------------------+
-|  3. Cost calculator + logger             |  PostgreSQL (async)
-|     actual_cost      = $0.00            |
-|     theoretical_cost = tokens x rate    |
-|     baseline_cost    = tokens x GPT-4o  |
-|     savings          = baseline-theor.  |
-+---------------------+--------------------+
-                      v
-+------------------------------------------+
-|  4. Dashboard                            |  Next.js 14 + WebSocket (live)
-|     Savings ticker (theoretical)         |  7-card masonry layout
-|     Routing donut + latency bars         |  Recharts + SVG
-|     Cache performance + quality          |  Auto-refreshes via WebSocket
-+------------------------------------------+
+
+### Request flow
+
+- Last user message is embedded and compared against Redis cache entries
+- Semantic similarity decides whether a prior answer can be reused
+- If no hit, the request is classified into simple / medium / complex
+- The correct tier is selected using the cheapest capable model
+- If Groq fails or rate limits, the router escalates or falls back to a local Ollama model
+- Final output is logged and displayed in the real-time dashboard with cost metadata
+
+---
+
+## Featured capabilities
+
+### Semantic cache
+
+- Uses Redis + `all-MiniLM-L6-v2` embeddings
+- Cosine-similarity lookup across cached prompts
+- Cache-hit latency measured around 11–15 ms p95
+- Prevents redundant inference for repeated queries
+
+### Complexity-aware routing
+
+- Uses a semantic router to classify prompts
+- Routes quick tasks to simpler models and complex reasoning to larger models
+- Keeps the cost profile optimized while preserving answer quality
+
+### Free model inference
+
+- Primary models run on Groq free-tier infrastructure
+- Local fallback through Ollama for resilience during rate limiting or outages
+- Actual inference cost remains $0.00 in the project model
+
+### Cost analytics
+
+- Calculates actual spend, theoretical cost, GPT-4o baseline cost, and savings
+- Stores request history and route metadata in PostgreSQL
+- Exposes analytics via FastAPI and a live dashboard
+
+### OpenAI compatibility
+
+- `POST /v1/chat/completions` works as a drop-in replacement for many OpenAI SDK client flows
+- Existing apps can route through EconRoute with minimal integration changes
+
+---
+
+## Model routing matrix
+
+| Tier    | Primary model                  | Fallback model        | Typical use case                                           | Cost profile |
+| ------- | ------------------------------ | --------------------- | ---------------------------------------------------------- | ------------ |
+| Simple  | `groq/openai/gpt-oss-20b`      | `ollama/qwen2.5:0.5b` | Short factual answers, quick formatting, lightweight tasks | $0 actual    |
+| Medium  | `groq/llama-3.3-70b-versatile` | `ollama/llama3.2:3b`  | General reasoning, summarization, assistive writing        | $0 actual    |
+| Complex | `groq/openai/gpt-oss-120b`     | `ollama/llama3.1:8b`  | Deep analysis, structured reasoning, multi-step work       | $0 actual    |
+
+This project calculates theoretical value against the GPT-4o baseline, even though the real backend is running on free infrastructure.
+
+---
+
+## Performance and evaluation results
+
+The project includes evaluation artifacts under `evals/` and a classifier validation report in `evals/results/classifier_eval.json`.
+
+### Core metrics
+
+| Metric                   | Result                     | Evidence                                   |
+| ------------------------ | -------------------------- | ------------------------------------------ |
+| Cache hit latency p95    | ~11–15 ms                  | Redis + embedding cache benchmark          |
+| Classifier accuracy      | 90%                        | `evals/results/classifier_eval.json`       |
+| Total requests evaluated | 60                         | held-out eval set                          |
+| Actual spend             | $0.00                      | free-tier Groq + local fallback            |
+| Savings benchmark        | GPT-4o baseline comparison | cost model in`tracking/cost_calculator.py` |
+
+### Evaluation summary
+
+```json
+{
+  "accuracy": 0.9,
+  "correct": 54,
+  "total": 60,
+  "target_accuracy": 0.8,
+  "passed": true
+}
 ```
 
+This is a strong signal that the routing logic is not just cheap — it is also directionally accurate on varied prompt complexity.
 
-![EconRoute Architecture](docs/images/architecture.png)
 ---
 
 ## Tech stack
 
-| Layer             | Tool                                   | Cost           | Why this, not X                                               |
-| ----------------- | -------------------------------------- | -------------- | ------------------------------------------------------------- |
-| Simple tier       | Groq `llama-3.1-8b-instant`          | **Free** | ~150 ms p95; faster than most paid APIs                       |
-| Medium tier       | Groq `llama-3.3-70b-versatile`       | **Free** | 70B quality; Groq's custom chips make it fast                 |
-| Complex tier      | Groq `deepseek-r1-distill-llama-70b` | **Free** | Reasoning model; best open-source for hard tasks              |
-| Local fallback    | Ollama `llama3.1:8b`                 | **Free** | Offline; handles Groq rate limits automatically               |
-| LLM gateway       | LiteLLM                                | Free           | One interface for Groq + Ollama; swap model = config change   |
-| Semantic cache    | Redis + sentence-transformers          | Free           | Local embeddings (all-MiniLM-L6-v2); cosine match at <8 ms    |
-| Classifier        | semantic-router                        | Free           | Zero-shot local routing; no training data needed to start     |
-| API layer         | FastAPI + asyncio                      | Free           | Async parallel calls; OpenAI-compatible schema out of the box |
-| Cost tracking     | PostgreSQL + SQLAlchemy                | Free           | Structured logs; SQL views for dashboard metrics              |
-| Quality eval      | Ollama LLM-as-judge                    | Free           | Scores outputs offline; no paid judge API                     |
-| Frontend          | Next.js 14 + Tailwind                  | Free           | WebSocket client; masonry CSS layout                          |
-| Charts            | Recharts                               | Free           | React-native; lightweight; streaming-friendly                 |
-| Deploy (backend)  | Railway free                           | Free           | Persistent FastAPI; 500 hrs/month                             |
-| Deploy (frontend) | Vercel hobby                           | Free           | Next.js native; instant deploy                                |
+| Layer          | Stack                                                     |
+| -------------- | --------------------------------------------------------- |
+| API layer      | FastAPI, Pydantic, OpenAI-compatible schema               |
+| Model routing  | Groq, LiteLLM, semantic-router                            |
+| Cache layer    | Redis, sentence-transformers,`all-MiniLM-L6-v2`           |
+| Local fallback | Ollama                                                    |
+| Persistence    | PostgreSQL + SQLAlchemy + asyncpg                         |
+| Dashboard      | Streamlit + Plotly; Next.js frontend with live WebSockets |
+| Deployment     | Docker Compose, Railway, Vercel                           |
 
-**Total monthly cost: $0.00**
+---
+
+## Repository structure
+
+```text
+EconRoute-Engine/
+├── README.md
+├── DEPLOY.md
+├── IMPLEMENTATION_PLAN.md
+├── FREE_DEPLOYMENT_PLAN.md
+├── Dockerfile
+├── Dockerfile.prod
+├── docker-compose.yml
+├── railway.toml
+├── requirements.txt
+├── requirements-dev.txt
+├── requirements-locked.txt
+├── prometheus.yml
+├── .env.example
+├── gateway/
+│   ├── __init__.py
+│   ├── analytics.py
+│   ├── cache.py
+│   ├── classifier.py
+│   ├── fallback.py
+│   ├── main.py
+│   ├── models.py
+│   └── router.py
+├── providers/
+│   ├── __init__.py
+│   ├── litellm_client.py
+│   └── model_config.py
+├── tracking/
+│   ├── __init__.py
+│   ├── cost_calculator.py
+│   └── db.py
+├── dashboard/
+│   ├── __init__.py
+│   └── app.py
+├── websocket/
+│   ├── __init__.py
+│   └── manager.py
+├── tests/
+│   ├── test_cost_calculator.py
+│   ├── test_logging.py
+│   └── test_websocket.py
+├── evals/
+│   ├── __init__.py
+│   ├── classifier_eval.py
+│   ├── eval_set.jsonl
+│   ├── run_eval.py
+│   ├── testset.py
+│   └── results/
+├── frontend/
+│   ├── app/
+│   ├── components/
+│   ├── lib/
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── next.config.mjs
+│   ├── package.json
+│   └── tailwind.config.ts
+├── docs/
+│   └── images/
+└── scripts/
+```
 
 ---
 
 ## Quick start
 
+### 1) Clone the repo
+
 ```bash
-# 1. Clone
-git clone https://github.com/insha-parveen/EconRoute-Engine
+git clone https://github.com/insha-parveen/EconRoute-Engine.git
 cd EconRoute-Engine
+```
 
-# 2. Get a free Groq API key (no credit card)
-# https://console.groq.com -> Create API Key
+### 2) Configure environment variables
 
-# 3. Configure
-cp .env.example .env
-# Add GROQ_API_KEY=gsk_... to .env (only required key)
+Create a local `.env` file based on the project defaults and your environment.
 
-# 4. Start everything
-docker-compose up -d
-# Starts: FastAPI + Redis + PostgreSQL + Prometheus + Grafana
+```bash
+copy .env.example .env
+```
 
-# 5. Verify
+Typical values:
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+OLLAMA_BASE_URL=http://localhost:11434
+REDIS_URL=redis://localhost:6379
+DATABASE_URL=postgresql+asyncpg://econroute:econroute@localhost:5432/econroute
+DASHBOARD_DATABASE_URL=postgresql+psycopg2://econroute:econroute@localhost:5432/econroute
+LOG_LEVEL=INFO
+FALLBACK_TO_OLLAMA=true
+```
+
+### 3) Start local services
+
+```bash
+docker compose up -d
+```
+
+This starts the gateway, Redis, Postgres, dashboard, and frontend stack together.
+
+### 4) Verify the API
+
+```bash
 curl http://localhost:8000/health
-# -> {"status": "ok", "cache": "connected", "db": "connected", "groq": "ok"}
+```
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "cache": "connected",
+  "db": "connected",
+  "groq": "ok"
+}
+```
+
+### 5) Send a chat request
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "auto",
+    "messages": [{
+      "role": "user",
+      "content": "Explain the difference between HTTP and HTTPS in simple terms."
+    }]
+  }'
 ```
 
 ---
 
-## Usage example
-
-**Request — same as any OpenAI SDK call, just change base_url:**
+## Python client example
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="not-needed",        # EconRoute does not require an OpenAI key
-    base_url="http://localhost:8000/v1"
+    api_key="not-needed",
+    base_url="http://localhost:8000/v1",
 )
 
 response = client.chat.completions.create(
-    model="auto",                # EconRoute picks the tier automatically
-    messages=[{"role": "user", "content": "What is the capital of France?"}]
+    model="auto",
+    messages=[
+        {"role": "user", "content": "Give me a short explanation of semantic caching."}
+    ],
 )
-```
 
-**Response with routing metadata:**
-
-```json
-{
-  "id": "chatcmpl-abc123",
-  "model_used": "groq/llama-3.1-8b-instant",
-  "tier": "simple",
-  "cache_hit": false,
-  "latency_ms": 187,
-  "actual_cost_usd": 0.00000,
-  "theoretical_cost_usd": 0.00008,
-  "baseline_cost_usd": 0.00160,
-  "savings_usd": 0.00152,
-  "savings_source": "routing",
-  "choices": [{"message": {"role": "assistant", "content": "Paris."}}]
-}
-```
-
-**Second identical request (cache hit):**
-
-```json
-{
-  "model_used": "cache",
-  "cache_hit": true,
-  "latency_ms": 14,
-  "actual_cost_usd": 0.00000,
-  "theoretical_cost_usd": 0.00000,
-  "baseline_cost_usd": 0.00160,
-  "savings_usd": 0.00160,
-  "savings_source": "cache"
-}
+print(response.choices[0].message.content)
 ```
 
 ---
 
-## Results
+## Dashboard access
 
-> Replace `[X]` with real numbers from `evals/quality_bench.py` and `evals/latency_bench.py` before sharing.
+The project exposes a live analytics dashboard and request feed.
 
-| Metric                                    | Value                           | Notes                              |
-| ----------------------------------------- | ------------------------------- | ---------------------------------- |
-| **Theoretical cost if all-GPT-4o**  | $[X]                            | Across 1,000 benchmark prompts     |
-| **Theoretical cost with EconRoute** | $[X]                            | Routed across 3 open-source tiers  |
-| **Total theoretical savings**       | **$[X] ([X]% reduction)** | Routing + cache combined           |
-| Savings from semantic cache               | $[X] ([X]% of total)            | [X]% cache hit rate                |
-| Savings from smart routing                | $[X] ([X]% of total)            | Routing to cheaper equivalent tier |
-| **Actual API spend**                | **$0.00**                 | Groq free tier + Ollama            |
-| p95 latency — simple tier                | [X] ms                          | Groq llama-3.1-8b-instant          |
-| p95 latency — complex tier               | [X] ms                          | Groq deepseek-r1                   |
-| Cache hit rate                            | [X]%                            | similarity threshold = 0.92        |
-| Cache false positive rate                 | [X]%                            | Wrong answers served               |
-| Quality equivalence — simple tier        | [X]%                            | Rated equal to GPT-4o by LLM judge |
-| Quality equivalence — medium tier        | [X]%                            | Rated equal to GPT-4o by LLM judge |
-| Classifier accuracy                       | [X]%                            | vs 100 hand-labelled prompts       |
+- Streamlit dashboard: `http://localhost:8501`
+- Frontend dashboard: `http://localhost:3000`
+- WebSocket feed: `ws://localhost:8000/ws/requests`
+- Prometheus metrics: `http://localhost:9090`
+
+The dashboard visualizes:
+
+- route-tier distribution
+- cache-hit rates
+- cumulative theoretical savings
+- latency percentiles
+- recent request log history
 
 ---
 
-## Pinterest-style dashboard
+## Deployment
 
-7-card masonry layout — updates live via WebSocket on every request.
+This project is designed for both local Docker development and managed deployments.
 
-| Card                        | What it shows                                                          |
-| --------------------------- | ---------------------------------------------------------------------- |
-| **Savings ticker**    | Theoretical savings today ($) + sparkline + "$0.00 actual spend" badge |
-| **Routing donut**     | % of requests per tier (cache / simple / medium / complex)             |
-| **Latency bars**      | p50 and p95 per tier — horizontal colour-coded bars                   |
-| **Live feed**         | Last 6 requests: model used, query preview, theoretical cost, latency  |
-| **Cache performance** | Hit rate %, false positive rate %, cache vs routing savings split      |
-| **Quality monitor**   | LLM-judge equivalence % vs GPT-4o baseline, per tier                   |
-| **Cost breakdown**    | Theoretical cost per model + routing % share                           |
+### Local development
+
+```bash
+docker compose up -d
+```
+
+### Production-friendly options
+
+- Railway for the FastAPI backend
+- Vercel for the Next.js frontend
+- Neon/Postgres for database storage
+- Upstash/Redis for managed cache
+
+See `DEPLOY.md` for a production deployment walkthrough.
 
 ---
 
-## Project structure
+## Notes on the cost model
+
+EconRoute does not claim to reduce real cloud bill spend to zero in production by magic. Instead, it models the theoretical value of routing against a GPT-4o baseline using published pricing estimates.
+
+In practice:
+
+- actual spend remains zero on free-tier Groq/Ollama usage
+- theoretical savings provide a meaningful business signal
+- routing decisions are transparent, explainable, and auditable
+
+This makes the project well suited for portfolio demonstration, cost-aware infrastructure experiments, and LLM routing research.
+
+---
+
+## Testing
+
+The project includes a lightweight test suite covering the cost calculator, logging behavior, and WebSocket broadcasting.
+
+```bash
+pytest
+```
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
+
+<p align="center">
+  <a href="https://github.com/insha-parveen/EconRoute-Engine" target="_blank">
+    <img src="https://img.shields.io/badge/⭐_Star_this_project-111827?style=for-the-badge" alt="Star this project" />
+  </a>
+</p>
 
 ```
-econroute/
-├── gateway/
-│   ├── main.py              # FastAPI — /v1/chat/completions, /health, /metrics, /ws/requests
-│   ├── router.py            # cache -> classify -> route -> cost -> log
-│   ├── classifier.py        # semantic-router: simple / medium / complex
-│   ├── cache.py             # embed, cosine-match vs Redis, store on miss
-│   ├── fallback.py          # Groq -> Ollama; tier escalation; exponential backoff
-│   └── models.py            # Pydantic schemas
-├── providers/
-│   ├── litellm_client.py    # LiteLLM async wrapper; Groq + Ollama
-│   └── model_config.py      # tier mapping + theoretical cost rates + baseline rates
-├── tracking/
-│   ├── logger.py            # async log to Postgres + emit WebSocket event
-│   ├── cost_calculator.py   # actual=0, theoretical, baseline, savings
-│   └── db.py                # SQLAlchemy models + async engine
-├── websocket/
-│   └── events.py            # WebSocket manager; broadcast RoutingEvent
-├── dashboard/               # Streamlit fallback (Week 4)
-│   ├── app.py
-│   └── queries.py
-├── frontend/                # Next.js 14 Pinterest dashboard (Week 5)
-│   ├── app/page.tsx
-│   ├── components/          # SavingsCard, RoutingDonut, LatencyCard, LiveFeedCard...
-│   ├── lib/websocket.ts
-│   └── types/routing.ts
-├── evals/
-│   ├── quality_bench.py     # 100 prompts; Ollama judge; CSV + summary
-│   ├── latency_bench.py     # 200 req/tier async; p50/p95/p99; markdown table
-│   └── threshold_sweep.py   # cache similarity sweep: 0.85 / 0.90 / 0.92 / 0.95 / 0.98
-├── Dockerfile
-├── docker-compose.yml       # FastAPI + Redis + Postgres + Prometheus + Grafana
-└── .env.example
-```
-
 
 ⭐ If you found this project useful, consider giving it a star.
+```

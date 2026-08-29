@@ -28,5 +28,4 @@ evals/results/*.json
 CLAUDE.md
 .claude/
 .cache/
-IMPLEMENTATION_PLAN.md
-FREE_DEPLOYMENT_PLAN.md
+.github/agents/

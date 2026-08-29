@@ -132,6 +132,33 @@ export default function HeroDemo() {
         </div>
       )}
 
+      {/* LLM Response panel */}
+      {result && showCards && (
+        <div className="mx-auto mt-6 max-w-2xl animate-reveal">
+          <div className="rounded-xl border border-bg-border bg-bg-card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💬</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                  Response from {result.model_used}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-text-muted">
+                {result.latency_ms.toFixed(0)}ms · {result.input_tokens + result.output_tokens} tokens · tier: {result.tier}
+              </span>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
+                {/* Optional-chained: the response is an unvalidated `as ChatResponse`
+                    cast, so an empty choices[] would throw during render and escape
+                    the error state straight to the Next error boundary. */}
+                {result.choices?.[0]?.message?.content ?? ""}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Savings + eval stat strip */}
       {result && showCards && (
         <p className="mt-6 text-center text-sm text-text-secondary animate-reveal">

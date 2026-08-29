@@ -4,7 +4,7 @@
 # node:20-alpine image with a volume mount + `npm install && npm run dev` — no image
 # build, which avoids the "no space left on device" failures seen locally.
 #
-# This multi-stage build is for PRODUCTION deploy (Railway/Vercel-style). Wire it up
+# This multi-stage build is for PRODUCTION deploy (Render/Vercel-style). Wire it up
 # in Week 5's deploy step.
 
 # ── deps ──────────────────────────────────────────────────────────────────────

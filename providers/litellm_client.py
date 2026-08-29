@@ -84,7 +84,7 @@ async def call_model(
         api_base = None   # Groq uses LiteLLM's default Groq endpoint
 
     # Respect tier max_tokens unless caller overrides
-    effective_max_tokens = max_tokens or GROQ_TIERS[tier]["max_tokens"]
+    effective_max_tokens = max_tokens or config["max_tokens"]
 
     # ── Convert Pydantic ChatMessage → plain dicts for LiteLLM ──────────────
     messages_dicts = [{"role": m.role, "content": m.content} for m in messages]

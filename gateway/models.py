@@ -141,7 +141,7 @@ class ChatResponse(BaseModel):
                 "object": "chat.completion",
                 "model": "auto",
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": "Paris."}, "finish_reason": "stop"}],
-                "model_used": "groq/llama-3.1-8b-instant",
+                "model_used": "groq/openai/gpt-oss-20b",
                 "tier": "simple",
                 "cache_hit": False,
                 "latency_ms": 187.0,

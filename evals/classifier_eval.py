@@ -26,6 +26,13 @@ import sys
 from gateway.classifier import classify
 from evals.testset import TEST_SET
 
+# Windows consoles default to cp1252, which cannot encode the arrows and box-drawing
+# characters in the report below — printing them raises UnicodeEncodeError and kills
+# the script *after* the eval has run but *before* write_results(). Force UTF-8 so the
+# report and the artifact both survive on Windows.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(level=logging.WARNING)  # quiet the classifier's INFO chatter
 logger = logging.getLogger(__name__)
 
@@ -56,7 +63,10 @@ def run_eval(test_set: list[tuple[str, str]]) -> dict:
     correct = 0
 
     for query, expected in test_set:
-        predicted = classify(query)
+        # classify() returns a (tier, confidence) TUPLE — it must be unpacked.
+        # Without this, `predicted not in TIERS` is true for every row, so every
+        # row is skipped, total stays 0, and the script reports 0% and exits 1.
+        predicted, _confidence = classify(query)
 
         # Defensive: classify() should only ever return a valid tier, but a bad
         # return would silently corrupt the confusion matrix — surface it instead.
@@ -132,7 +142,7 @@ def print_report(results: dict) -> None:
     print(f"  Overall accuracy : {acc:6.1%}  "
           f"({results['correct']}/{results['total']})")
     print(f"  Target           : {target:6.1%}")
-    status = "PASS ✅" if passed else "FAIL ❌"
+    status = "PASS" if passed else "FAIL"
     print(f"  Result           : {status}")
     print("-" * 60)
 
@@ -161,7 +171,7 @@ def print_report(results: dict) -> None:
         for row in mis:
             print(f"    [{row['expected']:>7} → {row['predicted']:<7}] {row['query']}")
     else:
-        print("  Misclassified: none 🎉")
+        print("  Misclassified: none")
     print("=" * 60)
     print()
 

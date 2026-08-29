@@ -12,11 +12,11 @@ Why theoretical rates?
   Rate sources:
     - GPT-4o:       https://openai.com/pricing
     - Haiku equiv:  Claude Haiku pricing (similar capability to gpt-oss-20b)
-    - Mini equiv:   GPT-4o-mini pricing (similar capability to llama-3.3-70b)
+    - Mini equiv:   GPT-4o-mini pricing (similar capability to qwen3.8-27b)
 
-Model status (verified June 2026 — console.groq.com/docs/models):
+Model status (verified August 2026 — console.groq.com/docs/models):
   simple  : openai/gpt-oss-20b       — Production, 1000 t/s (fastest on Groq)
-  medium  : llama-3.3-70b-versatile  — Production, 280 t/s  (proven quality)
+  medium  : qwen/qwen3.8-27b         — Preview, 450 t/s   (free-tier callable; llama-3.3-70b is Enterprise-only)
   complex : openai/gpt-oss-120b      — Production, 500 t/s  (flagship, reasoning)
 
 LiteLLM prefix rule:
@@ -59,7 +59,7 @@ GROQ_TIERS: dict[str, TierConfig] = {
         "max_tokens": 1024,
     },
     "medium": {
-        "model": "groq/llama-3.3-70b-versatile",   # 280 t/s — proven, stable
+        "model": "groq/qwen/qwen3.8-27b",          # 450 t/s — free-tier callable (llama-3.3-70b is Enterprise-only)
         "actual_cost_per_1k_input": 0.0,
         "actual_cost_per_1k_output": 0.0,
         # Theoretical equivalent: GPT-4o-mini ($0.00015 input / $0.00060 output per 1K)
@@ -127,7 +127,7 @@ VALID_TIERS = list(GROQ_TIERS.keys())   # ["simple", "medium", "complex"]
 # Note: Free tier = Developer plan limits below
 
 GROQ_RATE_LIMITS = {
-    "groq/openai/gpt-oss-20b":       {"rpm": 1000, "tpm": 250_000, "rpd": 14_400},
-    "groq/llama-3.3-70b-versatile":  {"rpm": 1000, "tpm": 300_000, "rpd": 14_400},
-    "groq/openai/gpt-oss-120b":      {"rpm": 1000, "tpm": 250_000, "rpd": 14_400},
+    "groq/openai/gpt-oss-20b":       {"rpm": 30, "tpm": 8_000, "rpd": 1_000},
+    "groq/qwen/qwen3.8-27b":         {"rpm": 30, "tpm": 8_000, "rpd": 1_000},
+    "groq/openai/gpt-oss-120b":      {"rpm": 30, "tpm": 8_000, "rpd": 1_000},
 }

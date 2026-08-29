@@ -9,12 +9,18 @@ Design:
 
 Redis key schema:
   cache:{uuid4}  →  JSON {
-    "query":     str,          # original query text (for debugging)
+    "query_id":  str,          # sha256 hash — no plaintext prompt at rest
     "embedding": list[float],  # 384 floats
     "response":  str,          # cached assistant response
     "tier":      str,          # which tier answered (simple/medium/complex)
     "timestamp": float,        # unix timestamp
   }
+
+On "no plaintext at rest":
+  We store the hash rather than the prompt so a Redis dump contains no readable
+  prompts. This is defence in depth, not anonymisation — the 384-dim embedding is
+  still here, and embeddings are partially invertible, so treat cache contents as
+  sensitive. Nothing reads query_id; it exists purely to correlate with logs.
 
 Why UUID keys (not text keys)?
   We need to scan ALL cached embeddings to find the best cosine match.
@@ -121,9 +127,14 @@ def _query_id(text: str) -> str:
     """
     Return a short non-sensitive identifier for a query — used in logs instead
     of raw text to prevent PII leakage.
-    Format: sha256[:8] (len=N) — enough to correlate log lines, nothing more.
+    Format: sha256[:16] (len=N) — enough to correlate log lines, nothing more.
+
+    The [:16] slice MUST match gateway/router.py::_query_id. That function stamps
+    the id onto Postgres rows and the WebSocket feed; a different slice length here
+    would make cache logs and request logs impossible to join on query_id, which is
+    the entire reason the hash exists.
     """
-    digest = hashlib.sha256(text.encode()).hexdigest()[:8]
+    digest = hashlib.sha256(text.encode()).hexdigest()[:16]
     return f"sha256:{digest}(len={len(text)})"
 
 
@@ -329,7 +340,7 @@ async def store(
         key       = f"{_KEY_PREFIX}{uuid.uuid4()}"
 
         entry = {
-            "query":     query_text,
+            "query_id":  _query_id(query_text),  # hash only — no plaintext at rest
             "embedding": query_vec,
             "response":  response,
             "tier":      tier,

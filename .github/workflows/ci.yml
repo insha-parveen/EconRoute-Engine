@@ -57,8 +57,8 @@ jobs:
       - name: Lint with ruff (autofix then verify)
         run: |
           pip install ruff
-          ruff check gateway/ tracking/ providers/ tests/ --fix
-          ruff check gateway/ tracking/ providers/ tests/
+          ruff check gateway/ tracking/ providers/ tests/ evals/ websocket/ --fix
+          ruff check gateway/ tracking/ providers/ tests/ evals/ websocket/
 
       - name: Test with pytest
         env:
@@ -68,6 +68,22 @@ jobs:
         run: |
           pip install pytest pytest-asyncio httpx pytest-timeout
           pytest tests/ -v --timeout=30
+
+      # Gates on classifier accuracy >= 0.80 (run_eval.py exits 1 below target).
+      # Runs fully offline — local MiniLM encoder, no Groq key, no Redis, no network.
+      # This step exists because the eval silently rotted once: classify() gained a
+      # tuple return and both eval scripts kept treating it as a str, so the quoted
+      # accuracy became unreproducible for weeks. CI now catches that immediately.
+      - name: Classifier accuracy eval (held-out, gates at 80%)
+        run: python -m evals.run_eval
+
+      - name: Upload eval artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: classifier-eval-results
+          path: evals/results/run_eval.json
+          if-no-files-found: warn
 
   frontend:
     runs-on: ubuntu-latest

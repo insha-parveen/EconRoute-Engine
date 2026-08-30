@@ -36,8 +36,14 @@ RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements-locked.
 # Fix: point the fastembed/huggingface cache to /app/.cache which is inside
 # WORKDIR, owned by econroute after the chown below.
 # ENV persists into runtime so TextEmbedding() loads from same path.
+# IMPORTANT: fastembed uses its OWN cache dir (FASTEMBED_CACHE_PATH), NOT
+# HF_HOME. Without this the build-time model is ignored and re-downloaded
+# at container start — doubling memory at boot on Render's 512MB free tier.
+ENV FASTEMBED_CACHE_PATH=/app/.cache/fastembed
 ENV HF_HOME=/app/.cache/huggingface
 ENV HF_HUB_DISABLE_TELEMETRY=1
+# Cap ONNX/OpenMP thread pools — fewer threads, less RAM on 1 vCPU
+ENV OMP_NUM_THREADS=1
 
 # ─── Pre-download ONNX embedding model at build time ─────────────────────────
 # Why here (not at runtime)?
@@ -45,7 +51,7 @@ ENV HF_HUB_DISABLE_TELEMETRY=1
 #   Baking it into the image means: download once, fast start forever.
 #   ~25 MB int8 ONNX model cached in this layer — Docker reuses it unless the
 #   pip layer changes. HF_HOME above ensures build and runtime share the path.
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', threads=1)"
 
 # ─── Copy application code ───────────────────────────────────────────────────
 # This layer is re-run on any code change (that's fine — it's fast).

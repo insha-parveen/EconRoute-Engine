@@ -34,7 +34,10 @@ logger = logging.getLogger(__name__)
 _EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 logger.info(f"Loading fastembed ONNX model: {_EMBED_MODEL}")
-_model = TextEmbedding(_EMBED_MODEL)
+# threads=1: ONNX Runtime defaults to a per-core thread pool, which inflates
+# RAM and fights uvicorn for CPU on Render's single-core free instance.
+# Single-threaded inference is ~2x slower (~11ms → ~25ms) but far lighter.
+_model = TextEmbedding(_EMBED_MODEL, threads=1)
 logger.info(f"fastembed model loaded: {_EMBED_MODEL} (384-dim, ONNX int8)")
 
 
@@ -55,8 +58,14 @@ def embed_batch(texts: list[str]) -> np.ndarray:
     """
     if not texts:
         return np.zeros((0, 384), dtype=np.float32)
-    vectors = np.stack([np.asarray(v, dtype=np.float32) for v in _model.embed(texts)])
-    return vectors
+    # Chunk into small batches: ONNX Runtime's memory arena grows to the peak
+    # batch size and never shrinks. Embedding 60 utterances in one call sized
+    # the arena for batch-60 inference (~200 MB); chunks of 8 keep it small
+    # with negligible throughput cost at this scale.
+    out = [np.asarray(v, dtype=np.float32)
+           for i in range(0, len(texts), 8)
+           for v in _model.embed(texts[i:i + 8])]
+    return np.stack(out)
 
 
 def embed_one(text: str) -> np.ndarray:

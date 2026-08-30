@@ -13,10 +13,12 @@ groq>=0.9.0                        # Groq SDK (LiteLLM uses this under the hood)
 
 # ─── Semantic Cache (Week 2) ──────────────────────────────────────────────────
 redis>=5.0.0                       # async Redis client
-sentence-transformers>=3.0.0       # local embeddings (all-MiniLM-L6-v2)
+fastembed>=0.3.0                   # ONNX int8 embeddings (all-MiniLM-L6-v2) — no torch,
+                                   # ~8x less RAM than sentence-transformers + semantic-router
+numpy>=1.26.0                      # vector math for cache + classifier
 
 # ─── Complexity Classifier (Week 3) ──────────────────────────────────────────
-semantic-router>=0.0.72            # zero-shot local query routing
+
 
 # ─── Database (Week 4) ────────────────────────────────────────────────────────
 sqlalchemy>=2.0.0                  # async ORM

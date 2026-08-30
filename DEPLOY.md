@@ -1,188 +1,110 @@
-# EconRoute — Deployment Guide (Railway + Vercel)
+# EconRoute — Deployment Guide (Render + Vercel)
 
-## Architecture
+> **Stack:** FastAPI gateway on Render (Docker) · Postgres on Neon · Redis on Upstash · Frontend on Vercel.
+> Replaces the previous Railway setup (`railway.toml` has been removed).
 
-```text
-                        ┌──────────────────────┐
-                        │  Neon (Postgres)       │
-                        │  Serverless · Free     │
-                        │  500MB storage         │
-                        └──────────┬───────────┘
-                                   │
-┌──────────────┐        ┌──────────┴───────────┐
-│  Vercel       │        │  Railway             │
-│  (Frontend)   │──HTTP─▶│  (FastAPI Gateway)   │
-│  Free tier    │  WS    │  1 container · $5/mo │
-└──────────────┘        └──────────┬───────────┘
-                                   │
-                        ┌──────────┴───────────┐
-                        │  Upstash (Redis)      │
-                        │  Serverless · Free    │
-                        │  10MB · 1000 req/day  │
-                        └──────────────────────┘
+```
+┌──────────┐      ┌──────────────┐
+│  Vercel  │      │    Render    │
+│ (Next.js)│─────▶│  (FastAPI)   │
+└──────────┘      └──────┬───────┘
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+        ┌──────────┐         ┌──────────┐
+        │  Neon    │         │  Upstash │
+        │ (Postgres│         │  (Redis) │
+        └──────────┘         └──────────┘
 ```
 
-**Only 1 container to manage** (the gateway on Railway). Postgres via Neon, Redis via Upstash.
+**Only 1 container to manage** (the gateway on Render). Postgres via Neon, Redis via Upstash.
 
----
+| Service | Cost | Notes |
+| --------- | --------------------- | ----------------------------------------- |
+| Render (gateway) | Free tier (750 hrs/mo) | Spins down after 15 min idle — see keep-alive below |
+| Neon (Postgres) | Free tier | Serverless, scale-to-zero |
+| Upstash (Redis) | Free tier | 10K commands/day |
+| Vercel (frontend) | Free (Hobby) | |
+| Groq (LLM) | Free tier | gpt-oss-20b / qwen3.8-27b / gpt-oss-120b |
 
-## Prerequisites (5 minutes each)
+## Step 1: Prep the Repo
 
-| Service | Sign Up | Free Tier |
-|---------|---------|-----------|
-| [Railway](https://railway.app) | GitHub login | $5 credit/mo (no credit card) |
-| [Neon](https://neon.tech) | GitHub login | 500MB Postgres |
-| [Upstash](https://upstash.com) | GitHub login | 10MB Redis |
-| [Vercel](https://vercel.com) | GitHub login | Frontend hosting |
-| [Groq](https://console.groq.com) | Email login | Free LLM API |
+The repo contains a `render.yaml` Blueprint (service, health check, prod start command).
+Commit and push it:
 
----
-
-## Step 1: Get Your Connection Strings
-
-### Neon (Postgres)
 ```bash
-# 1. Go to https://neon.tech → sign up with GitHub
-# 2. Create project → region: Singapore (closest to India)
-# 3. Copy the connection string
-#    Looks like: postgresql://user:pass@ep-xxx.neon.tech/econroute?sslmode=require
-```
-
-### Upstash (Redis)
-```bash
-# 1. Go to https://upstash.com → sign up with GitHub
-# 2. Create Redis database → region: Singapore
-# 3. Copy the REST URL
-#    Looks like: redis://default:pass@xxx.upstash.io:6379
-```
-
-### Groq (LLM API)
-```bash
-# 1. Go to https://console.groq.com → sign up
-# 2. Create API Key → copy it
-#    Looks like: gsk_your_key_here
-```
-
----
-
-## Step 2: Deploy Backend to Railway
-
-### Option A: Via GitHub (easiest)
-```bash
-# 1. Push your code to GitHub first
-git add -A
-git commit -m "chore: add Railway deployment config"
+git add render.yaml
+git commit -m "deploy: add Render blueprint with prod start command and health check"
 git push origin main
 ```
 
-1. Go to https://railway.app → **Login with GitHub**
-2. Click **"New Project"** → **"Deploy from GitHub repo"**
-3. Select your repo (`insha-parveen/EconRoute-Engine`)
-4. Railway auto-detects `railway.toml` and `Dockerfile.prod`
-5. Go to **"Variables"** tab and add:
-   - `GROQ_API_KEY` = `gsk_your_key_here`
-   - `DATABASE_URL` = your Neon connection string
-   - `REDIS_URL` = your Upstash connection string
-   - `LOG_LEVEL` = `INFO`
-   - `FALLBACK_TO_OLLAMA` = `false`
-6. Go to **"Settings"** → **"Generate Domain"** → copy the URL (e.g. `econroute.up.railway.app`)
-7. Deploy happens automatically
+## Step 2: Deploy Backend to Render
 
-### Option B: Via Railway CLI
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
+### Option A: Via Render Dashboard (Blueprint)
 
-# Login
-railway login
+1. Go to https://dashboard.render.com → **Login with GitHub**
+2. **New → Blueprint** → select the `EconRoute-Engine` repo
+3. Render reads `render.yaml` → fill in the `sync: false` secrets:
+   - `GROQ_API_KEY`: from https://console.groq.com
+   - `DATABASE_URL`: Neon connection string (`postgresql+asyncpg://...?sslmode=require`)
+   - `REDIS_URL`: Upstash **`rediss://`** URL (double-s — TLS is in the scheme)
+4. **Apply** — first build takes ~10–15 min (torch + MiniLM model baked into image)
 
-# Link project
-railway init
+### Option B: Via Render Dashboard (manual, no Blueprint)
 
-# Set variables
-railway variables set GROQ_API_KEY="gsk_your_key_here"
-railway variables set DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/econroute"
-railway variables set REDIS_URL="redis://default:pass@xxx.upstash.io:6379"
+1. **New → Web Service** → connect the repo
+2. **Runtime**: Docker · **Dockerfile**: `Dockerfile.prod`
+3. **Start command**: `uvicorn gateway.main:app --host 0.0.0.0 --port $PORT --workers 1`
+4. **Health check path**: `/health` · **Region**: match your Neon/Upstash region
+5. Add the env vars listed above
 
-# Deploy
-railway up
+### Keep-alive ping (prevents free-tier spin-down)
 
-# Get URL
-railway domain
-```
+Render free services sleep after ~15 min without traffic. Use cron-job.org (free):
 
----
+1. Go to https://cron-job.org → Create cronjob
+2. **URL**: `https://<your-service>.onrender.com/health`
+3. **Schedule**: every 10 minutes → Save & enable
 
 ## Step 3: Deploy Frontend to Vercel
 
-1. Go to https://vercel.com/new
-2. **Import your GitHub repo**
-3. Settings:
-   - **Framework Preset**: Next.js
-   - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `.next`
-4. Environment Variables:
-   - `NEXT_PUBLIC_API_URL`: `https://econroute.up.railway.app` (your Railway URL)
-   - `NEXT_PUBLIC_WS_URL`: `wss://econroute.up.railway.app/ws/requests`
-5. Click **Deploy**
-
----
+1. Go to https://vercel.com → **Add New → Project** → import the repo
+2. **Root Directory**: `frontend`
+3. Environment variables:
+   - `NEXT_PUBLIC_API_URL`: `https://<your-service>.onrender.com`
+   - `NEXT_PUBLIC_WS_URL`: `wss://<your-service>.onrender.com/ws/requests`
+4. Deploy
 
 ## Step 4: Verify
 
 ```bash
-# Health check
-curl https://econroute.up.railway.app/health
-# Expected: {"status":"ok","cache":"connected","db":"connected","groq":"ok"}
+curl https://<your-service>.onrender.com/health
 
-# Chat completion
-curl -X POST https://econroute.up.railway.app/v1/chat/completions \
+curl -X POST https://<your-service>.onrender.com/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"What is Python?"}]}'
-
-# Open dashboard
-open https://econroute.vercel.app
+  -d '{"messages":[{"role":"user","content":"What is inflation?"}]}'
 ```
 
----
+Expected /health response: `{"status":"ok","db":"ok","cache":"ok","groq":"ok"}`
 
-## Local Development Still Works
+## Monthly Cost
 
-Your `docker-compose up -d` runs everything locally. Production is a mirror with managed services:
-
-```
-LOCAL (docker-compose)          PRODUCTION
-──────────────────────────────────────────────────
-gateway:8000        ──→        Railway (1 container)
-postgres:5432       ──→        Neon (serverless)
-redis:6379          ──→        Upstash (serverless)
-frontend:3000       ──→        Vercel
-```
-
----
-
-## Cost Breakdown
-
-| Service | Plan | Monthly Cost |
-|---------|------|-------------|
-| Railway (gateway) | Free tier ($5 credit) | **$0** |
-| Neon (Postgres) | Free tier (500MB) | **$0** |
-| Upstash (Redis) | Free tier (10MB) | **$0** |
-| Vercel (frontend) | Hobby (100GB bandwidth) | **$0** |
-| Groq (LLM) | Free tier (30 RPM) | **$0** |
-| GitHub Actions | Free (2000 min/month) | **$0** |
-| **Total** | | **$0.00/mo** |
-
----
+| Service | Tier | Cost |
+| ------------------ | ---------------------- | ------ |
+| Render (gateway) | Free tier (750 hrs/mo) | **$0** |
+| Neon (Postgres) | Free tier | **$0** |
+| Upstash (Redis) | Free tier | **$0** |
+| Vercel (frontend) | Hobby | **$0** |
+| Groq (LLM) | Free tier | **$0** |
+| **Total** | | **$0** |
 
 ## Troubleshooting
 
 | Problem | Fix |
-|---------|-----|
-| `db: "error"` in /health | Check `DATABASE_URL` in Railway Variables |
-| `cache: "error"` | Check `REDIS_URL` in Railway Variables |
-| `groq: "not_configured"` | Check `GROQ_API_KEY` in Railway Variables |
-| 503 on chat | Groq API key invalid or rate-limited |
-| Frontend can't connect | Check `NEXT_PUBLIC_API_URL` in Vercel env vars — must point to Railway URL |
-| WebSocket disconnects | Railway keeps connection alive automatically with `railway.toml` |
+| -------------------------- | -------------------------------------------------------------- |
+| `db: "error"` in /health | Check `DATABASE_URL` in Render → Environment |
+| `cache: "error"` | Check `REDIS_URL` — must be the `rediss://` (TLS) URL from Upstash |
+| `groq: "not_configured"` | Check `GROQ_API_KEY` in Render env vars |
+| Service keeps sleeping | cron-job.org not hitting `/health`, or wrong URL |
+| Frontend can't connect | Check `NEXT_PUBLIC_API_URL` in Vercel env vars — must point to the Render URL |
+| WebSocket disconnects | Ensure URL uses `wss://` (not `ws://`) — Vercel/Render handle TLS |

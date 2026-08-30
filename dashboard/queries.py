@@ -100,7 +100,7 @@ def get_tier_distribution(engine: Any, since: datetime | None = None) -> list[di
 
 _KNOWN_MODELS = [
     "groq/openai/gpt-oss-20b",
-    "groq/llama-3.3-70b-versatile",
+    "groq/qwen/qwen3.8-27b",
     "groq/openai/gpt-oss-120b",
     "ollama (fallback)",
 ]

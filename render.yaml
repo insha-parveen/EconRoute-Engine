@@ -1,0 +1,45 @@
+# render.yaml — Render Blueprint for the EconRoute backend
+# Deploy via: Render Dashboard → New → Blueprint → point at this repo.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Free-tier notes:
+#   - plan: free spins down after ~15 min without inbound requests.
+#     Keep it warm with an external pinger (cron-job.org, free) hitting /health
+#     every 10 minutes — see DEPLOY_STEPS in the repo README.
+#   - Cold start is slow (~40–60s): the container loads the MiniLM encoder
+#     into memory on boot. The /health endpoint only reports OK once the
+#     lifespan startup has finished, so pings also act as a readiness check.
+
+services:
+  - type: web
+    name: econroute-api
+    runtime: docker
+    plan: free
+    region: singapore            # closest free region to Neon/Upstash Singapore
+    dockerCommand: uvicorn gateway.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true             # redeploy on every push to main
+    numInstances: 1              # free tier is single-instance only
+
+    # ─── Env vars (synced; secrets added in the Render dashboard) ────────────
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false              # set in dashboard — never commit keys
+      - key: DATABASE_URL
+        sync: false              # e.g. postgresql+asyncpg://...neon.tech/econroute?sslmode=require
+      - key: REDIS_URL
+        sync: false              # Use Upstash's rediss:// URL (with double-s) — TLS is built into the scheme
+      - key: CACHE_SIMILARITY_THRESHOLD
+        value: "0.92"
+      - key: CACHE_TTL_SECONDS
+        value: "3600"
+      - key: SIMPLE_MODEL
+        value: "groq/openai/gpt-oss-20b"
+      - key: MEDIUM_MODEL
+        value: "groq/qwen/qwen3.8-27b"
+      - key: COMPLEX_MODEL
+        value: "groq/openai/gpt-oss-120b"
+      - key: FALLBACK_TO_OLLAMA
+        value: "false"           # no local Ollama in the cloud
+      - key: LOG_LEVEL
+        value: "INFO"

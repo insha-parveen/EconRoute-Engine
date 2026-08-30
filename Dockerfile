@@ -10,7 +10,7 @@ FROM python:3.11-slim
 
 # ─── System dependencies ──────────────────────────────────────────────────────
 # build-essential: needed to compile some Python packages (e.g. numpy, tokenizers)
-# curl: for health checks in docker-compose and Railway
+# curl: for health checks in docker-compose and Render
 RUN apt-get update && apt-get install -y \
   build-essential \
   curl \

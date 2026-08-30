@@ -67,9 +67,9 @@ async def lifespan(app: FastAPI):
     else:
         logger.info(f"✅ GROQ_API_KEY loaded (gsk_...{groq_key[-4:]})")
 
-    logger.info(f"✅ Simple  model : {os.getenv('SIMPLE_MODEL',  'groq/llama-3.1-8b-instant')}")
-    logger.info(f"✅ Medium  model : {os.getenv('MEDIUM_MODEL',  'groq/llama-3.3-70b-versatile')}")
-    logger.info(f"✅ Complex model : {os.getenv('COMPLEX_MODEL', 'groq/deepseek-r1-distill-llama-70b')}")
+    logger.info(f"✅ Simple  model : {os.getenv('SIMPLE_MODEL',  'groq/openai/gpt-oss-20b')}")
+    logger.info(f"✅ Medium  model : {os.getenv('MEDIUM_MODEL',  'groq/qwen/qwen3.8-27b')}")
+    logger.info(f"✅ Complex model : {os.getenv('COMPLEX_MODEL', 'groq/openai/gpt-oss-120b')}")
     logger.info(f"✅ Ollama fallback: {os.getenv('FALLBACK_TO_OLLAMA', 'true')}")
 
     # Ensure the request_logs table exists (best-effort — see init_db docstring).

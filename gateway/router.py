@@ -19,8 +19,9 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from gateway.cache import find_match, store
 from redis.exceptions import RedisError
+
+from gateway.cache import find_match, store
 from gateway.classifier import classify
 from gateway.fallback import call_with_fallback
 from gateway.models import (

@@ -23,7 +23,7 @@ const PIPELINE_NODES: PipelineNode[] = [
   { id: "cache",     label: "Semantic Cache",             subtitle: "Redis · cosine ≥ 0.92",     icon: "💾", tier: "cache" },
   { id: "classify",  label: "Complexity Classifier",      subtitle: "semantic-router · 3 routes", icon: "🔍" },
   { id: "groq-oss-20b",   label: "groq/openai/gpt-oss-20b",      subtitle: "~150ms · simplest queries", icon: "⚡", tier: "simple" },
-  { id: "groq-llama-70b", label: "groq/llama-3.3-70b-versatile", subtitle: "~400ms · explanations",     icon: "⚡", tier: "medium" },
+  { id: "groq-qwen-27b",  label: "groq/qwen/qwen3.8-27b",        subtitle: "~400ms · explanations",     icon: "⚡", tier: "medium" },
   { id: "groq-oss-120b",  label: "groq/openai/gpt-oss-120b",     subtitle: "~800ms · reasoning",        icon: "⚡", tier: "complex" },
   { id: "ollama",    label: "Ollama Fallback",             subtitle: "qwen2.5 / llama3.2",        icon: "🖥", tier: "fallback" },
 ];
@@ -55,7 +55,7 @@ export default function PipelineFlow({
       cache:     `${cachePct.toFixed(0)}% hit`,
       classify:  `${(100 - cachePct).toFixed(0)}% routed`,
       "groq-oss-20b":   `${f("20b").toFixed(0)}%`,
-      "groq-llama-70b": `${f("70b").toFixed(0)}%`,
+      "groq-qwen-27b":  `${f("27b").toFixed(0)}%`,
       "groq-oss-120b":  `${f("120b").toFixed(0)}%`,
       ollama:    `${f("ollama").toFixed(0)}%`,
     };
@@ -68,7 +68,7 @@ export default function PipelineFlow({
       else if (node.id === "cache") active = lastEvent?.cache_hit === true;
       else if (node.id === "classify") active = lastEvent !== null && !lastEvent.cache_hit;
       else if (node.id === "groq-oss-20b") active = lastModel?.includes("20b") ?? false;
-      else if (node.id === "groq-llama-70b") active = lastModel?.includes("70b") ?? false;
+      else if (node.id === "groq-qwen-27b") active = lastModel?.includes("27b") ?? false;
       else if (node.id === "groq-oss-120b") active = lastModel?.includes("120b") ?? false;
       else if (node.id === "ollama") active = lastModel?.includes("ollama") ?? false;
 

@@ -22,6 +22,7 @@ Table creation:
 import logging
 import os
 
+from asyncpg.exceptions import PostgresError
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -33,7 +34,6 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import SQLAlchemyError
-from asyncpg.exceptions import PostgresError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,

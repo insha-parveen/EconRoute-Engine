@@ -20,8 +20,6 @@ Why LiteLLM?
 import logging
 from typing import TypedDict
 
-import litellm
-from litellm import acompletion
 
 from gateway.models import ChatMessage
 from providers.model_config import GROQ_TIERS, OLLAMA_TIERS
@@ -29,7 +27,7 @@ from providers.model_config import GROQ_TIERS, OLLAMA_TIERS
 logger = logging.getLogger(__name__)
 
 # Suppress LiteLLM's verbose logging — we handle our own
-litellm.set_verbose = False
+pass  # set_verbose now set inside call_model (lazy import)
 
 
 class LLMResponse(TypedDict):
@@ -104,7 +102,11 @@ async def call_model(
             kwargs["api_base"] = api_base
 
         # acompletion = async completion (non-blocking)
-        response = await acompletion(**kwargs)
+        # Lazy import: litellm (and its openai/boto3/tiktoken deps) adds ~100-150MB
+        # RSS at boot. On Render's 512MB free tier that is the difference between
+        # fitting and being OOM-killed, so import on the first model call instead.
+        litellm.set_verbose = False
+        response = await litellm.acompletion(**kwargs)
 
     except litellm.exceptions.RateLimitError as e:
         raise LLMError(f"Rate limit hit on {model_str}: {e}") from e

@@ -17,9 +17,13 @@ COPY requirements.txt requirements-locked.txt ./
 RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements-locked.txt
 
 # Pre-download ONNX embedding model at build time
+# fastembed uses its own FASTEMBED_CACHE_PATH (not HF_HOME) — set it so the
+# baked cache is the same path the runtime reads. No re-download at boot.
+ENV FASTEMBED_CACHE_PATH=/app/.cache/fastembed
 ENV HF_HOME=/app/.cache/huggingface
 ENV HF_HUB_DISABLE_TELEMETRY=1
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
+ENV OMP_NUM_THREADS=1
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', threads=1)"
 
 COPY . .
 

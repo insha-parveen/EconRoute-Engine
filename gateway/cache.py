@@ -50,22 +50,25 @@ from typing import Optional
 
 import redis.asyncio as aioredis
 from redis.exceptions import RedisError
-from sentence_transformers import SentenceTransformer
 
+from gateway import embedder
 from gateway.models import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-# ─── Model — loaded once at module import time ────────────────────────────────
-# ~2-3s on first import. After that: <5ms per embed call.
-# all-MiniLM-L6-v2: 384 dimensions, 22MB, fast CPU inference, good semantic quality.
-_MODEL_NAME = "all-MiniLM-L6-v2"
-logger.info(f"Loading sentence-transformers model: {_MODEL_NAME}")
-_model = SentenceTransformer(_MODEL_NAME)
-logger.info(f"Model loaded: {_MODEL_NAME}")
+# ─── Model — shared fastembed singleton (gateway/embedder.py) ─────────────────
+# The ONNX int8 MiniLM model loads once at import (~1-2 s), shared with the
+# classifier so cache and routes live in one vector space. No torch.
+# all-MiniLM-L6-v2: 384 dimensions, ~25 MB ONNX int8, fast CPU inference.
+_MODEL_NAME = "all-MiniLM-L6-v2 (fastembed ONNX int8, shared)"
+
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-_THRESHOLD = float(os.getenv("CACHE_SIMILARITY_THRESHOLD", "0.92"))
+# 0.88 (was 0.92 with float32 torch): int8 ONNX quantization compresses the
+# similarity range — exact duplicates still score 1.0, but strong paraphrases
+# land at 0.82–0.91 (measured, scripts/cache_sanity.py), while unrelated
+# queries sit near 0.05. 0.88 recovers paraphrase hits with no false-hit risk.
+_THRESHOLD = float(os.getenv("CACHE_SIMILARITY_THRESHOLD", "0.88"))
 _TTL       = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
 _KEY_PREFIX = "cache:"
 
@@ -152,7 +155,7 @@ def embed(text: str) -> list[float]:
         The same meaning in different words produces similar vectors.
         "What is Python?" ≈ "Explain Python to me" → cosine similarity ~0.94
     """
-    vector = _model.encode(text, convert_to_numpy=True)
+    vector = embedder.embed_one(text)
     return vector.tolist()
 
 

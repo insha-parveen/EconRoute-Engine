@@ -26,8 +26,21 @@ from providers.model_config import GROQ_TIERS, OLLAMA_TIERS
 
 logger = logging.getLogger(__name__)
 
-# Suppress LiteLLM's verbose logging — we handle our own
-pass  # set_verbose now set inside call_model (lazy import)
+# Lazy litellm loader — litellm (and its openai/boto3/tiktoken deps) adds
+# ~100-150MB RSS at import. On Render's 512MB free tier that is the
+# difference between fitting and being OOM-killed, so defer the import to
+# the first model call and cache the module for all later calls.
+_litellm = None
+
+
+def _get_litellm():
+    global _litellm
+    if _litellm is None:
+        import litellm
+        litellm.set_verbose = False
+        _litellm = litellm
+        logger.info("litellm lazy-loaded on first model call")
+    return _litellm
 
 
 class LLMResponse(TypedDict):
@@ -105,14 +118,14 @@ async def call_model(
         # Lazy import: litellm (and its openai/boto3/tiktoken deps) adds ~100-150MB
         # RSS at boot. On Render's 512MB free tier that is the difference between
         # fitting and being OOM-killed, so import on the first model call instead.
-        litellm.set_verbose = False
-        response = await litellm.acompletion(**kwargs)
+        lt = _get_litellm()
+        response = await lt.acompletion(**kwargs)
 
-    except litellm.exceptions.RateLimitError as e:
+    except lt.exceptions.RateLimitError as e:
         raise LLMError(f"Rate limit hit on {model_str}: {e}") from e
-    except litellm.exceptions.APIConnectionError as e:
+    except lt.exceptions.APIConnectionError as e:
         raise LLMError(f"Connection error for {model_str}: {e}") from e
-    except litellm.exceptions.Timeout as e:
+    except lt.exceptions.Timeout as e:
         raise LLMError(f"Timeout calling {model_str}: {e}") from e
     except (RuntimeError, ValueError, OSError) as e:
         raise LLMError(f"Unexpected error calling {model_str}: {e}") from e

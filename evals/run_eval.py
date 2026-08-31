@@ -25,7 +25,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from gateway.classifier import classify, _simple_route, _medium_route, _complex_route
+from gateway.classifier import classify, _TIER_UTTERANCES
 
 # Windows consoles default to cp1252. This script's own output is ASCII, but eval
 # queries and future report tweaks may not be — and a UnicodeEncodeError here would
@@ -57,8 +57,8 @@ def assert_held_out(rows: list[dict]) -> None:
     """Fail loud if any eval query is verbatim a route utterance — that would
     inflate the score and make the metric dishonest."""
     trained = set()
-    for route in (_simple_route, _medium_route, _complex_route):
-        trained.update(u.strip().lower() for u in route.utterances)
+    for utterances in _TIER_UTTERANCES.values():
+        trained.update(u.strip().lower() for u in utterances)
     leaked = [r["query"] for r in rows if r["query"].strip().lower() in trained]
     if leaked:
         print("ERROR — eval set leaks training utterances (not held-out):")

@@ -1,7 +1,7 @@
 "use client";
 
 // components/MetricCards.tsx — Metric strip: cache hit rate, fallback rate,
-// classifier accuracy (88.0%), total requests. Left-accent-border cards.
+// classifier accuracy (93.8%), total requests. Left-accent-border cards.
 
 import { EVAL } from "@/lib/types";
 import type { StatsTotals } from "@/lib/types";

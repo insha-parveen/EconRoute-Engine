@@ -130,7 +130,7 @@ export interface LiveEvent {
 
 // Fixed held-out eval numbers (evals/run_eval.py) — NOT live-computed.
 export const EVAL = {
-  overall: 88.3,
+  overall: 93.8,
   simpleRecall: 95.0,
   simpleTier: 95.0,
 } as const;
